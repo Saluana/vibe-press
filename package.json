@@ -1,0 +1,5 @@
+{
+  "name": "vibe-press",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
+}
