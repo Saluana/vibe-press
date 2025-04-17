@@ -4,12 +4,18 @@
   "type": "module",
   "main": "src/server.ts",
   "scripts": {
-    "dev": "bun run src/server.ts"
+    "dev": "bun run src/server.ts",
+    "migrate:generate": "drizzle-kit generate:migration",
+    "migrate:up": "drizzle-kit push"
+  },
+  "drizzle": {
+    "schema": "./src/core/db/schema.ts",
+    "out": "./migrations"
   },
   "dependencies": {
-    "@types/express": "^5.0.1",
     "arktype": "^2.1.20",
-    "bcrypt": "^5.1.1",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "dotenv": "^16.5.0",
     "drizzle-orm": "^0.42.0",
     "express": "^5.1.0",
@@ -18,7 +24,10 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/pg": "^8.11.13"
+    "@types/express": "^5.0.1",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/pg": "^8.11.13",
+    "drizzle-kit": "^0.31.0"
   },
   "peerDependencies": {
     "typescript": "^5.8.3"

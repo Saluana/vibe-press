@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import express, { Request, Response } from "express";
 import pg from "pg";
-import { type } from "arktype";
+import AuthRouter from "./api/rest/auth";
 const { Pool } = pg;
 
 // Load environment variables
@@ -33,6 +33,8 @@ app.get("/db-test", async (_req: Request, res: Response) => {
   }
 });
 
+// Auth endpoints
+app.use("/wp-json/wp/v2/", AuthRouter);
 
 // Start server
 const port = parseInt(process.env.PORT || "4000", 10);
