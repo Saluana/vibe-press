@@ -2,7 +2,7 @@ CREATE TABLE "wp_usermeta" (
 	"umeta_id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"meta_key" varchar(255),
-	"meta_value" text NOT NULL
+	"meta_value" jsonb NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "wp_users" (
@@ -37,7 +37,7 @@ CREATE TABLE "wp_termmeta" (
 	"meta_id" bigserial PRIMARY KEY NOT NULL,
 	"term_id" integer NOT NULL,
 	"meta_key" varchar(255),
-	"meta_value" text NOT NULL
+	"meta_value" jsonb NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "wp_terms" (

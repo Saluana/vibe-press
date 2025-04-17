@@ -1,8 +1,9 @@
 // src/api/rest/auth.ts
 import { Router, Request, Response } from 'express';
-import { createUser } from '../../core/services/user.services';
+import { createUser } from '../../core/services/user/user.services';
 import { signJwt, loginUser } from '../../core/services/auth.services';
 import { type } from 'arktype';
+import { wpError } from '../../core/utils/wpError';
 
 const router = Router();
 
@@ -31,10 +32,7 @@ router.post('/register', async (req: Request, res: Response) => {
   });
 
   if (result instanceof type.errors) {
-    return res.status(400).json({ 
-      error: 'Validation failed', 
-      details: result.summary 
-    });
+    return res.status(400).json(wpError('400', 'Validation failed', 400, { details: result.summary }));
   }
 
   try {
@@ -56,9 +54,19 @@ router.post('/register', async (req: Request, res: Response) => {
         display_name: user.display_name,
       },
     });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Failed to register user' });
+  } catch (e: any) {
+    // Log the full error object for debugging
+    console.error('Registration error:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
+  
+    // Try to find the code property in different places
+    const code = e.code || (e.originalError && e.originalError.code);
+  
+    if (code === '23505') {
+      // Unique constraint violation (username or email already exists)
+      return res.status(409).json(wpError('23505', 'A user with that email or username already exists.'));
+    }
+  
+    res.status(500).json(wpError('500', 'Failed to register user'));
   }
 });
 
@@ -72,10 +80,7 @@ router.post('/login', async (req: Request, res: Response) => {
   });
 
   if (result instanceof type.errors) {
-    return res.status(400).json({ 
-      error: 'Validation failed', 
-      details: result.summary 
-    });
+    return res.status(400).json(wpError('400', 'Validation failed', 400, { details: result.summary }));
   }
 
   try {
@@ -90,11 +95,23 @@ router.post('/login', async (req: Request, res: Response) => {
         display_name: user.display_name,
       },
     });
-  } catch (e) {
-    console.error(e);
-    // Don't expose whether the user exists or password is wrong
-    res.status(401).json({ error: 'Invalid credentials' });
+  } catch (e: any) {
+    res.status(500).json(wpError('500', 'Failed to login'));
   }
+});
+
+// Example protected route for testing Basic Auth with Application Password
+router.get('/users',  async (req: Request, res: Response) => {
+  // Only accessible if Basic Auth is valid
+  // Optionally, check req.query.context === 'edit' to mimic WP behavior
+  const user = (req as any).user;
+  res.json({
+    id: user.ID,
+    username: user.user_login,
+    email: user.user_email,
+    display_name: user.display_name,
+    // Add more fields as needed
+  });
 });
 
 export default router;

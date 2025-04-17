@@ -1,7 +1,8 @@
 // src/core/services/user.service.ts
-import { db, schema } from '../db';
-import { hashPassword } from './auth.services';
+import { db, schema } from '../../db';
+import { hashPassword } from '../auth.services';
 import { eq, or } from 'drizzle-orm';
+import { createUserMetaDefaults } from './userMeta.services';
 
 
 export async function createUser({
@@ -28,6 +29,10 @@ export async function createUser({
     user_activation_key: '',
     user_status: 0,
   }).returning();
+
+  await createUserMetaDefaults(result[0].ID, {
+    nickname: display_name,
+  });
 
   return result[0];
 }

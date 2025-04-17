@@ -5,7 +5,7 @@
   "main": "src/server.ts",
   "scripts": {
     "dev": "bun run src/server.ts",
-    "migrate:generate": "drizzle-kit generate:migration",
+"migrate:generate": "drizzle-kit generate",
     "migrate:up": "drizzle-kit push"
   },
   "drizzle": {

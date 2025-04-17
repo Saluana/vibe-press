@@ -1,0 +1,1 @@
+ALTER TABLE "wp_users" ADD CONSTRAINT "wp_users_user_email_unique" UNIQUE("user_email");

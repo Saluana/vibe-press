@@ -4,6 +4,7 @@ import {
     pgTable,
     bigserial,
     varchar,
+    jsonb,
     text,
     integer,
   } from 'drizzle-orm/pg-core';
@@ -34,6 +35,6 @@ import {
     meta_id:    bigserial({ mode: 'number' }).primaryKey(),
     term_id:    integer('term_id').notNull().references(() => wp_terms.term_id),
     meta_key:   varchar('meta_key', { length: 255 }),
-    meta_value: text('meta_value').notNull(),
+    meta_value: jsonb('meta_value').notNull(),
   });
   

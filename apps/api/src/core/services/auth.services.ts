@@ -1,6 +1,6 @@
 // src/core/services/auth.service.ts
 import jwt from 'jsonwebtoken';
-import { getUserByLoginOrEmail } from './user.services';
+import { getUserByLoginOrEmail } from './user/user.services';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 

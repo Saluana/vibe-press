@@ -1,6 +1,6 @@
 {
-  "id": "ec224d64-20c1-480b-a833-e320107367cd",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "ad9bf574-b276-45a4-942c-38600c2970f4",
+  "prevId": "ec224d64-20c1-480b-a833-e320107367cd",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -132,7 +132,15 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "wp_users_user_email_unique": {
+          "name": "wp_users_user_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_email"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
