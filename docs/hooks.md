@@ -1,221 +1,103 @@
-
-# AstroPress Hook Engine
-
-A lightweight, functional hook system inspired by WordPress, built for modern fullstack apps using Astro + Bun (or any modern JS stack).
+Here's the updated documentation with a new section titled **"📚 Pre‑Registered Core Hooks"** that lists built-in hooks like `user.register:before`:
 
 ---
 
-## ✅ What It Does
+# 📌 AstroPress Hook System – Quick Reference
 
-The hook engine lets **plugins**, **themes**, or **core features** tap into your app’s lifecycle using standardized filters and actions.
-
-- **Filters** modify a value
-- **Actions** just run side-effects
-
-You can register, remove, or override behavior using priority-based callbacks — just like WordPress, but fully typed and functional.
+AstroPress includes a modern, type-safe hook system inspired by WordPress’s `WP_Hook`. It allows plugins and core logic to register and run callbacks at specific moments in the lifecycle of your app.
 
 ---
 
-## 📦 Installation
+## 🧠 Concepts
 
-The engine is provided internally. To use it, import either:
+- **Filters** modify data and return a value.
+- **Actions** are fire-and-forget events (like logging, side-effects).
+- All hooks are **namespaced strings** (e.g. `user.register:before`, `post.save:after`).
+- Hook order is determined by **priority** (default: `10`). Lower runs first.
+- Callbacks can specify how many arguments they accept (`acceptedArgs`).
+
+---
+
+## 🔧 API Methods
 
 ```ts
-import { serverHooks } from 'apps/core/hooks/hookEngine.server'
-import { clientHooks } from 'apps/core/hooks/hookEngine.client'
+const hooks = createHookEngine();
 ```
+
+| Method | Description |
+|--------|-------------|
+| `addFilter(hook, fn, priority?, acceptedArgs?)` | Attach a callback to a hook |
+| `removeFilter(hook, fn, priority?)` | Remove a previously added callback |
+| `hasFilter(hook?, fn?)` | Check if a filter exists (for a hook or specific fn) |
+| `hasFilters()` | Check if *any* filters exist |
+| `removeAllFilters(priority?)` | Remove all filters, or all at a given priority |
+| `applyFilters(hook, value, ...args)` | Apply all filters for a hook and return result |
+| `doAction(hook, ...args)` | Run all callbacks for an action (no return value) |
+| `doAllHook(args)` | Run *all* hooks with same args (dev/debug only) |
+| `currentPriority()` | Returns currently running priority (or `false`) |
 
 ---
 
-## 🧱 Folder Structure
-
-```
-packages/core/hooks/
-├── createHookEngine.ts        ← core hook logic
-├── hookEngine.server.ts       ← server-side hook instance
-└── hookEngine.client.ts       ← client-side hook instance
-```
-
----
-
-## 🚀 Usage Examples
-
-### 🟦 Backend (Bun / Express)
+## ✅ Example: Registering Hooks
 
 ```ts
-// plugin-my-auth.ts
-import { serverHooks } from 'apps/core/hooks/hookEngine.server'
+serverHooks.addFilter('user.register:before', (_unused, payload) => {
+  if (payload.username === 'forbidden') {
+    throw new Error('This username is not allowed.');
+  }
+}, 10, 2);
 
-serverHooks.addFilter(
-  'auth:isAdmin',
-  (isAdmin, user) => user.role === 'superuser' || isAdmin,
-  20
-)
-
-// Later during auth check
-const isAdmin = serverHooks.applyFilters(false, currentUser)
+serverHooks.doAction('user.register:before', { username: 'john' });
 ```
 
 ---
 
-### 🌐 Frontend (Astro / Vue)
+## 📚 Pre‑Registered Core Hooks
 
-```ts
-// plugin-my-theme.ts
-import { clientHooks } from 'apps/core/hooks/hookEngine.client'
+These are the hook points already wired into AstroPress core. Plugins and themes can safely use these:
 
-clientHooks.addFilter('theme:primaryColor', () => '#ff4081')
+### 🧍 User Registration/Login
+| Hook | When it fires |
+|------|----------------|
+| `user.register:before` | Before user is created in DB |
+| `user.register:after` | After user is created and token is issued |
+| `user.register:error` | On registration failure |
+| `user.login:before` | Before login attempt |
+| `user.login:after` | After successful login |
+| `user.login:error` | On login failure |
+| `user.get:before` | Before fetching user data (e.g. in `/users`) |
+| `user.get:after` | After user data is returned |
 
-// In your layout.tsx or Vue component
-const color = clientHooks.applyFilters('#000000') // → '#ff4081'
+*You can attach filters or actions to any of these to intercept, validate, or observe user activity.*
+
+---
+
+## 🔍 Internals
+
+- Uses a `WeakMap` for unique function identity
+- Supports nested hooks and real-time reordering during execution
+- Shared between backend and frontend via `registerServer()` / `registerClient()`
+
+---
+
+## 🔒 Best Practices
+
+- Use namespaced hooks: `user.login:after`, `post.save:before`
+- Keep filters pure — no side-effects
+- Keep actions impure — side-effects like logging, analytics, etc.
+- Avoid mutating arguments unless intentional
+
+---
+
+## 📁 Folder Integration
+
+Located in:
+```
+packages/core/hooks/createWPHook.ts
+packages/core/hooks/hookEngine.server.ts (instance)
+packages/plugins/*/server.ts (usage)
 ```
 
 ---
 
-## 🧩 Core Concepts
-
-### 🔁 Filters
-
-Modify a value by chaining logic from multiple plugins/themes.
-
-```ts
-hooks.addFilter('search:query', (query) => query.trim())
-hooks.addFilter('search:query', (query) => query.toLowerCase(), 20)
-
-const result = hooks.applyFilters('  Hello WORLD  ')
-// → 'hello world'
-```
-
----
-
-### ⚡️ Actions
-
-Fire functions without changing any value — useful for logging, tracking, etc.
-
-```ts
-hooks.addFilter('user:created', (noop, user) => {
-  sendWelcomeEmail(user.email)
-}, 10)
-
-hooks.doAction({ id: '123', email: 'me@example.com' })
-```
-
-> Note: actions internally use `applyFilters(undefined, ...args)`. Same engine.
-
----
-
-### ⛔️ Removing a Filter
-
-```ts
-const fn = (v: string) => v + '!'
-hooks.addFilter('exclaim', fn)
-hooks.removeFilter('exclaim', fn)
-```
-
----
-
-## 📚 Best Practices
-
-### Where to Register Hooks
-
-- **Plugins**: in their own `register.ts`
-- **Themes**: in `theme.ts` or `layout.ts`
-- **Core**: on app bootstrap
-
-> Avoid registering hooks inline in components unless they are runtime‑scoped.
-
----
-
-### Where to Apply Filters
-
-| Context          | Use Case                       |
-|------------------|--------------------------------|
-| `applyFilters`   | Modifying config, values, UI   |
-| `doAction`       | Triggering side effects        |
-| `hasFilter`      | Conditionally injecting logic  |
-| `removeAllFilters` | Cleanup in tests or hot reloads |
-
----
-
-## 🔒 Server vs Client Separation
-
-Always import from the correct engine:
-
-- **Server**: `hookEngine.server.ts`
-- **Client**: `hookEngine.client.ts`
-
-This keeps your logic tree-shakable and avoids hydration mismatches.
-
----
-
-## 🧠 Advanced
-
-### Custom Hook Contexts
-
-If you want to isolate hooks (e.g. per plugin), you can create fresh engines:
-
-```ts
-import { createHookEngine } from 'apps/core/hooks/createHookEngine'
-
-export const localHooks = createHookEngine()
-```
-
-Each instance is totally self-contained.
-
----
-
-## 🧪 Testing Hooks
-
-```ts
-import { createHookEngine } from 'apps/core/hooks/createHookEngine'
-
-const hooks = createHookEngine()
-
-hooks.addFilter('test:addOne', (n) => n + 1)
-const out = hooks.applyFilters(1) // → 2
-```
-
-Clear all:
-
-```ts
-hooks.removeAllFilters()
-```
-
----
-
-## 🔧 API Reference
-
-| Method               | Description                                      |
-|----------------------|--------------------------------------------------|
-| `addFilter()`        | Add a filter or action callback                  |
-| `removeFilter()`     | Remove specific callback                         |
-| `hasFilter()`        | Check if a callback exists                       |
-| `hasFilters()`       | Check if any filters exist at all                |
-| `applyFilters()`     | Run filter chain and return result               |
-| `doAction()`         | Run filter chain with no return value            |
-| `removeAllFilters()` | Clears all filters (or just by priority)         |
-| `currentPriority()`  | Returns priority of currently running callback   |
-
----
-
-## 📦 Real‑World Use Cases
-
-- Customize **search algorithms** (`search:query`, `search:results`)
-- Override **user roles** (`auth:isAdmin`, `user:canEdit`)
-- Inject **tracking/logging** (`route:loaded`, `user:created`)
-- Allow plugins to modify **menus**, **UI themes**, or **meta tags**
-
----
-
-## 🛡️ Safety Notes
-
-- All hooks are **synchronous**. Use wrappers for async flows.
-- Don’t assume filters are idempotent — call them exactly once.
-- Always namespace your hook names: `pluginName:eventName`
-
----
-
-## ✅ Summary
-
-This system gives you **WordPress-level extensibility**, minus the legacy.  
-No classes. No context hell. Just clean control over behavior injection.
+Let me know if you want the list of pre-registered hooks auto-generated or pulled dynamically from a `core-hooks.json` or metadata file.

@@ -37,7 +37,7 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 
   try {
-    serverHooks.doAction('user.register:before', { username, email, password, display_name });
+    serverHooks.doAction('user.register:before', { username, email, display_name });
 
     const user = await createUser({
       user_login: username,
@@ -109,20 +109,5 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 });
 
-// Example protected route for testing Basic Auth with Application Password
-router.get('/users',  async (req: Request, res: Response) => {
-  // Only accessible if Basic Auth is valid
-  // Optionally, check req.query.context === 'edit' to mimic WP behavior
-  const user = (req as any).user;
-  serverHooks.doAction('user.get:before', { user });
-  res.json({
-    id: user.ID,
-    username: user.user_login,
-    email: user.user_email,
-    display_name: user.display_name,
-    // Add more fields as needed
-  });
-  serverHooks.doAction('user.get:after', { user });
-});
 
 export default router;
