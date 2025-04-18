@@ -16,7 +16,7 @@ export function signJwt(userId: number): string {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '14d' });
 }
 
-export async function loginUser(identifier: string, password: string) {
+export async function authenticateUsernamePassword(identifier: string, password: string) {
   const user = await getUserByLoginOrEmail(identifier);
   if (!user) {
     throw new Error('User not found');

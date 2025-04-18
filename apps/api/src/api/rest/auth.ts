@@ -1,7 +1,7 @@
 // src/api/rest/auth.ts
 import { Router, Request, Response } from 'express';
 import { createUser } from '../../core/services/user/user.services';
-import { signJwt, loginUser } from '../../core/services/auth.services';
+import { signJwt, authenticateUsernamePassword } from '../../core/services/auth.services';
 import { type } from 'arktype';
 import { wpError } from '../../core/utils/wpError';
 import { serverHooks } from '../../core/hooks/hookEngine.server';
@@ -91,7 +91,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
   try {
     serverHooks.doAction('user.login:before', { username });
-    const { user, token } = await loginUser(username, password);
+    const { user, token } = await authenticateUsernamePassword(username, password);
     serverHooks.doAction('user.login:after', { user, token });
 
     res.status(200).json({
