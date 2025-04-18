@@ -11,7 +11,7 @@ import {
   
   export const wp_users = pgTable('wp_users', {
     ID:                  bigserial({ mode: 'number' }).primaryKey(),
-    user_login:          varchar('user_login',  { length: 60 }).notNull().default(''),
+    user_login:          varchar('user_login',  { length: 60 }).notNull().default('').unique(),
     user_pass:           varchar('user_pass',   { length: 255 }).notNull().default(''),
     user_nicename:       varchar('user_nicename',{ length: 50 }).notNull().default(''),
     user_email:          varchar('user_email',  { length:100 }).notNull().default('').unique(),

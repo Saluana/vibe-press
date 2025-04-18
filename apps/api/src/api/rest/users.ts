@@ -2,46 +2,46 @@ import { wpError } from "../../core/utils/wpError";
 import { serverHooks } from "../../core/hooks/hookEngine.server";
 import { getUsers, createUser, getUserByLoginOrEmail, updateUser, deleteUser } from "../../core/services/user/user.services";
 import { getUserMeta, setUserMeta, deleteUserMeta } from "../../core/services/user/userMeta.services";
-import { type } from "arktype";
 import { Router, Request, Response } from "express";
 import {toWpDatetime, fromWpDatetime} from '../../core/utils/wpTime';
 import { db, schema } from '../../core/db';
+import {z} from 'zod';
 // import { requireAuth, getCurrentUserId } from "../../core/middleware/auth"; // If you have auth helpers
 
 const router = Router();
 
 // Arktype schemas for validation
-const CreateUserValidation = type({
-  username: "string",
-  email: "string",
-  password: "string",
-  name: "string?",
-  first_name: "string?",
-  last_name: "string?",
-  url: "string?",
-  description: "string?",
-  locale: "string?",
-  nickname: "string?",
-  slug: "string?",
-  roles: "string[]?",
-  meta: "object?"
-});
+const CreateUserValidation = z.object({
+  username: z.string(),
+  email: z.string(),
+  password: z.string(),
+  name: z.string().optional(),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  url: z.string().optional(),
+  description: z.string().optional(),
+  locale: z.string().optional(),
+  nickname: z.string().optional(),
+  slug: z.string().optional(),
+  roles: z.array(z.string()).optional(),
+  meta: z.record(z.string(), z.any()).optional()
+}).strip();
 
-const UpdateUserValidation = type({
-  username: "string?",
-  email: "string?",
-  password: "string?",
-  name: "string?",
-  first_name: "string?",
-  last_name: "string?",
-  url: "string?",
-  description: "string?",
-  locale: "string?",
-  nickname: "string?",
-  slug: "string?",
-  roles: "string[]?",
-  meta: "object?"
-});
+const UpdateUserValidation = z.object({
+  username: z.string().optional(),
+  email: z.string().optional(),
+  password: z.string().optional(),
+  name: z.string().optional(),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  url: z.string().optional(),
+  description: z.string().optional(),
+  locale: z.string().optional(),
+  nickname: z.string().optional(),
+  slug: z.string().optional(),
+  roles: z.array(z.string()).optional(),
+  meta: z.record(z.string(), z.any()).optional()
+}).strip();
 
 const formatUserResponse = async (user: any) => {
   return {
@@ -64,22 +64,22 @@ const formatUserResponse = async (user: any) => {
 // @ts-expect-error
 router.get('/users', async (req: Request, res: Response) => {
   try {
-    const GetUsersValidation = type({
-      context: "'view' | 'embed' | 'edit'?" as const,
-      page: "number?",
-      per_page: "number?",
-      search: "string?",
-      exclude: "number | number[]?",     // string because query params are strings
-      include: "number | number[]?",
-      offset: "number?",
-      order: "'asc' | 'desc'?",
-      orderby: "'id' | 'name' | 'slug' | 'email' | 'url' | 'registered_date'?",
-      slug: "string | string[]?",
-      roles: "string | string[]?",
-      capabilities: "string | string[]?",
-      who: "'authors'?",
-      has_published_posts: "boolean?"
-    });
+    const GetUsersValidation = z.object({
+      context: z.enum(['view', 'embed', 'edit']).optional(),
+      page: z.number().optional(),
+      per_page: z.number().optional(),
+      search: z.string().optional(),
+      exclude: z.union([z.number(), z.array(z.number())]).optional(),
+      include: z.union([z.number(), z.array(z.number())]).optional(),
+      offset: z.number().optional(),
+      order: z.enum(['asc', 'desc']).optional(),
+      orderby: z.enum(['id', 'name', 'slug', 'email', 'url', 'registered_date']).optional(),
+      slug: z.union([z.string(), z.array(z.string())]).optional(),
+      roles: z.union([z.string(), z.array(z.string())]).optional(),
+      capabilities: z.union([z.string(), z.array(z.string())]).optional(),
+      who: z.enum(['authors']).optional(),
+      has_published_posts: z.boolean().optional()
+    }).strip();
   
     const query = req.query;
   
@@ -97,13 +97,13 @@ router.get('/users', async (req: Request, res: Response) => {
       hasPublishedPosts: query.has_published_posts === 'true' ? true : query.has_published_posts === 'false' ? false : undefined
     };
   
-    const validationResult = GetUsersValidation(queryParams);
+    const validationResult = GetUsersValidation.safeParse(queryParams);
 
-    const invalidParams = validationResult as any;
+    const invalidParams = validationResult.success ? undefined : validationResult.error;
 
-    if (invalidParams.errors && invalidParams.errors.length > 0) {
+    if (invalidParams) {
       const errorResponse = wpError('400', 'Invalid query parameters', 400, {
-        details: invalidParams.summary || 'There was an issue with one or more provided query parameters.'
+        details: invalidParams.message || 'There was an issue with one or more provided query parameters.'
       });
       return res.status(400).json(errorResponse);
     }

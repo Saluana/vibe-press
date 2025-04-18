@@ -2,38 +2,38 @@
 import { Router, Request, Response } from 'express';
 import { createUser } from '../../core/services/user/user.services';
 import { signJwt, authenticateUsernamePassword } from '../../core/services/auth.services';
-import { type } from 'arktype';
 import { wpError } from '../../core/utils/wpError';
 import { serverHooks } from '../../core/hooks/hookEngine.server';
+import {z} from 'zod';
 
 const router = Router();
 
 // Validation schemas
-const RegisterValidation = type({
-  username: "string",
-  email: "string",
-  password: "string",
-  display_name: "string?"
-});
+const RegisterValidation = z.object({
+  username: z.string().max(60),
+  email: z.string().email(),
+  password: z.string().min(6).max(255),
+  display_name: z.string().optional()
+}).strip();
 
-const LoginValidation = type({
-  username: "string",
-  password: "string"
-});
+const LoginValidation = z.object({
+  username: z.string().max(60),
+  password: z.string().min(6).max(255)
+}).strip();
 
 // @ts-expect-error
 router.post('/register', async (req: Request, res: Response) => {
   const { username, email, password, display_name } = req.body;
 
-  const result = RegisterValidation({
+  const result = RegisterValidation.safeParse({
     username,
     email,
     password,
     display_name
   });
 
-  if (result instanceof type.errors) {
-    return res.status(400).json(wpError('400', 'Validation failed', 400, { details: result.summary }));
+  if (!result.success) {
+    return res.status(400).json(wpError('400', 'Validation failed', 400, { details: result.error }));
   }
 
   try {
@@ -93,13 +93,13 @@ router.post('/register', async (req: Request, res: Response) => {
 router.post('/login', async (req: Request, res: Response) => {
   const { username, password } = req.body;
 
-  const result = LoginValidation({
+  const result = LoginValidation.safeParse({
     username,
     password
   });
 
-  if (result instanceof type.errors) {
-    return res.status(400).json(wpError('400', 'Validation failed', 400, { details: result.summary }));
+  if (!result.success) {
+    return res.status(400).json(wpError('400', 'Validation failed', 400, { details: result.error }));
   }
 
   try {
