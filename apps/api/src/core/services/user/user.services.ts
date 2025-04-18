@@ -27,7 +27,7 @@ export async function createUser({
   user_pass: string;
   display_name: string;
 }) {
-  serverHooks.doAction('user.create:before', { user_login, user_email, display_name });
+  await serverHooks.doAction('user.create:before', { user_login, user_email, display_name });
 
   const hashed = await hashPassword(user_pass);
 
@@ -47,8 +47,8 @@ export async function createUser({
     nickname: display_name,
   });
 
-  serverHooks.doAction('user.create:after', { user: result[0] });
-  return result[0];
+  await serverHooks.doAction('user.create:after', { user: result[0] });
+  return await serverHooks.applyFilters('user.create', result[0]);
 }
 
 /**
@@ -58,7 +58,7 @@ export async function createUser({
  * @returns {Promise<Object|null>} The user record, or null if not found.
  */
 export async function getUserByLoginOrEmail(identifier: string) {
-  serverHooks.doAction('user.get:before', { identifier });
+  await serverHooks.doAction('user.get:before', { identifier });
   const result = await db.select().from(schema.wp_users)
     .where(
       or(
@@ -66,8 +66,8 @@ export async function getUserByLoginOrEmail(identifier: string) {
         eq(schema.wp_users.user_email, identifier)
       )
     );
-  serverHooks.doAction('user.get:after', { user: result[0] });
-  return result[0] || null;
+  await serverHooks.doAction('user.get:after', { user: result[0] });
+  return await serverHooks.applyFilters('user.get', result[0] || null);
 }
 
 /**
@@ -91,7 +91,7 @@ export async function updateUser(userId: number, updates: {
   user_url?: string;
   user_status?: number;
 }) {
-  serverHooks.doAction('user.update:before', { userId, updates });
+  await serverHooks.doAction('user.update:before', { userId, updates });
   const data: any = { ...updates };
   if (updates.user_pass) {
     data.user_pass = await hashPassword(updates.user_pass);
@@ -100,8 +100,8 @@ export async function updateUser(userId: number, updates: {
     .set(data)
     .where(eq(schema.wp_users.ID, userId))
     .returning();
-  serverHooks.doAction('user.update:after', { user: result[0] });
-  return result[0] || null;
+  await serverHooks.doAction('user.update:after', { user: result[0] });
+  return await serverHooks.applyFilters('user.update', result[0] || null);
 }
 
 /**
@@ -111,10 +111,10 @@ export async function updateUser(userId: number, updates: {
  * @returns {Promise<Object|null>} The deleted user record.
  */
 export async function deleteUser(userId: number) {
-  serverHooks.doAction('user.delete:before', { userId });
+  await serverHooks.doAction('user.delete:before', { userId });
   const result = await db.delete(schema.wp_users)
     .where(eq(schema.wp_users.ID, userId))
     .returning();
-  serverHooks.doAction('user.delete:after', { user: result[0] });
-  return result[0] || null;
+  await serverHooks.doAction('user.delete:after', { user: result[0] });
+  return await serverHooks.applyFilters('user.delete', result[0] || null);
 }

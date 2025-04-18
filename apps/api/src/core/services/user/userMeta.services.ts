@@ -22,7 +22,7 @@ export async function createUserMetaDefaults(userId: number, overrides: {
   locale?: string; 
   role?: 'subscriber' | 'contributor' | 'author' | 'editor' | 'administrator'; 
 }) {
-  serverHooks.doAction('userMeta.create:before', { userId, overrides });
+  await serverHooks.doAction('userMeta.create:before', { userId, overrides });
   const role = overrides.role || 'subscriber';
 
   const metaValues = [
@@ -63,7 +63,7 @@ export async function createUserMetaDefaults(userId: number, overrides: {
       meta_value: meta.meta_value,
     }))
   );
-  serverHooks.doAction('userMeta.create:after', { userId, overrides });
+  await serverHooks.doAction('userMeta.create:after', { userId, overrides });
 }
 
 /**
@@ -74,7 +74,7 @@ export async function createUserMetaDefaults(userId: number, overrides: {
  * @returns {Promise<any>} The meta data for the user.
  */
 export async function getUserMeta(userId: number, metaKey?: string) {
-  serverHooks.doAction('userMeta.get:before', { userId, metaKey });
+  await serverHooks.doAction('userMeta.get:before', { userId, metaKey });
   let result;
   if (metaKey) {
     result = await db.select().from(schema.wp_usermeta)
@@ -86,8 +86,8 @@ export async function getUserMeta(userId: number, metaKey?: string) {
     result = await db.select().from(schema.wp_usermeta)
       .where(eq(schema.wp_usermeta.user_id, userId));
   }
-  serverHooks.doAction('userMeta.get:after', { userId, metaKey, result });
-  return result;
+  await serverHooks.doAction('userMeta.get:after', { userId, metaKey, result });
+  return await serverHooks.applyFilters('userMeta.get', result);
 }
 
 /**
@@ -108,7 +108,7 @@ export async function setUserMeta(userId: number, metaKey: string, metaValue: an
   if (updated.rowCount === 0) {
     await db.insert(schema.wp_usermeta).values({ user_id: userId, meta_key: metaKey, meta_value: metaValue });
   }
-  serverHooks.doAction('userMeta.set:after', { userId, metaKey, metaValue });
+  await serverHooks.doAction('userMeta.set:after', { userId, metaKey, metaValue });
 }
 
 /**
@@ -119,12 +119,12 @@ export async function setUserMeta(userId: number, metaKey: string, metaValue: an
  * @returns {Promise<any>} The result of the delete operation.
  */
 export async function deleteUserMeta(userId: number, metaKey: string) {
-  serverHooks.doAction('userMeta.delete:before', { userId, metaKey });
+  await serverHooks.doAction('userMeta.delete:before', { userId, metaKey });
   const result = await db.delete(schema.wp_usermeta)
     .where(and(
       eq(schema.wp_usermeta.user_id, userId),
       eq(schema.wp_usermeta.meta_key, metaKey)
     ));
-  serverHooks.doAction('userMeta.delete:after', { userId, metaKey, result });
-  return result;
+  await serverHooks.doAction('userMeta.delete:after', { userId, metaKey, result });
+  return await serverHooks.applyFilters('userMeta.delete', result);
 }

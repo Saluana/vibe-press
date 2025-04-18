@@ -27,8 +27,10 @@ export interface HookAPI {
   hasFilter(hookName?: string, callback?: Callback): boolean | number;
   hasFilters(): boolean;
   removeAllFilters(priority?: number): void;
-  applyFilters<T>(hookName: string, value: T, ...args: any[]): T;
-  doAction(hookName: string, ...args: any[]): void;
+  applyFiltersSync<T>(hookName: string, value: T, ...args: any[]): T;
+  applyFilters<T>(hookName: string, value: T, ...args: any[]): Promise<T>;
+  doActionSync(hookName: string, ...args: any[]): void;
+  doAction(hookName: string, ...args: any[]): Promise<void>;
   doAllHook(args: any[]): void;
   currentPriority(): number | false;
 }
@@ -177,7 +179,7 @@ export function createHookEngine(): HookAPI {
   }
 
   // Only apply filters for a specific hook
-  function applyFilters<T>(hookName: string, value: T, ...args: any[]): T {
+  function applyFiltersSync<T>(hookName: string, value: T, ...args: any[]): T {
     // no callbacks for this hook?
     const prios = priorities.filter(prio =>
       Object.keys(callbacks[prio] || {}).some(uid => uid.startsWith(hookName + ':'))
@@ -219,12 +221,39 @@ export function createHookEngine(): HookAPI {
     return result;
   }
 
-  // Fire action hooks: only payload to applyFilters, keyed by hookName
-  function doAction(hookName: string, ...args: any[]): void {
+  // Fire action hooks: only payload to applyFiltersSync, keyed by hookName
+  function doActionSync(hookName: string, ...args: any[]): void {
     doingAction = true;
     // run all filters for this hook, no return value needed
-    applyFilters<void>(hookName, undefined as any, ...args);
+    applyFiltersSync<void>(hookName, undefined as any, ...args);
     if (nestingLevel === 0) doingAction = false;
+  }
+
+  // Async versions: default async applyFilters/doAction
+  async function applyFilters<T>(hookName: string, value: T, ...args: any[]): Promise<T> {
+    const prios = priorities.filter(prio =>
+      Object.keys(callbacks[prio] || {}).some(uid => uid.startsWith(hookName + ':'))
+    );
+    if (prios.length === 0) return value;
+    let result: any = value;
+    const numArgsTotal = args.length + 1;
+    for (const prio of prios) {
+      for (const [uid, {fn, acceptedArgs}] of Object.entries(callbacks[prio] || {})) {
+        if (!uid.startsWith(hookName + ':')) continue;
+        if (acceptedArgs === 0) {
+          result = await fn();
+        } else if (acceptedArgs >= numArgsTotal) {
+          result = await fn(result, ...args);
+        } else {
+          result = await fn(...[result, ...args].slice(0, acceptedArgs));
+        }
+      }
+    }
+    return result;
+  }
+
+  async function doAction(hookName: string, ...args: any[]): Promise<void> {
+    await applyFilters<void>(hookName, undefined as any, ...args);
   }
 
   function doAllHook(args: any[]): void {
@@ -259,7 +288,9 @@ export function createHookEngine(): HookAPI {
     hasFilters,
     removeAllFilters,
     applyFilters,
+    applyFiltersSync,
     doAction,
+    doActionSync,
     doAllHook,
     currentPriority: currentPrio
   };

@@ -61,11 +61,11 @@ router.post('/register', async (req: Request, res: Response) => {
     const code = e.code || (e.originalError && e.originalError.code);
 
     if (code === '23505') {
-      serverHooks.doAction('user.create:error', { error: e });
+      await serverHooks.doAction('user.create:error', { error: e });
       return res.status(409).json(wpError('23505', 'A user with that email or username already exists.'));
     }
 
-    serverHooks.doAction('user.create:error', { error: e });
+    await serverHooks.doAction('user.create:error', { error: e });
     res.status(500).json(wpError('500', 'Failed to register user'));
   }
 });
@@ -96,7 +96,7 @@ router.post('/login', async (req: Request, res: Response) => {
       },
     });
   } catch (e: any) {
-    serverHooks.doAction('user.login:error', { error: e });
+    await serverHooks.doAction('user.login:error', { error: e });
     res.status(500).json(wpError('500', 'Failed to login'));
   }
 });
