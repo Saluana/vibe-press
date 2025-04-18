@@ -4,6 +4,7 @@ import pg from "pg";
 import AuthRouter from "./api/rest/auth";
 import UserRouter from "./api/rest/users";
 import './core/plugins/banned-names';
+import { requireCapabilities } from "./api/middleware/verifyRoles.middleware";
 const { Pool } = pg;
 
 // Load environment variables
@@ -25,7 +26,7 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 // DB test endpoint
-app.get("/db-test", async (_req: Request, res: Response) => {
+app.get("/db-test", requireCapabilities(['read', 'manage_options']), async (_req: Request, res: Response) => {
   try {
     const result = await pool.query("SELECT NOW() AS now");
     res.json({ now: result.rows[0].now });

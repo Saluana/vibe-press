@@ -334,18 +334,25 @@ declareHooks({
   'jwt.verify:after': { acceptedArgs: 2, description: 'After JWT is verified' },
 
   // 🧍 User Meta
+  'user.get': { acceptedArgs: 1, description: 'Before user data is returned' },
   'user.get:before': { acceptedArgs: 1, description: 'Before user data is returned' },
   'user.get:after': { acceptedArgs: 1, description: 'After user data is returned' },
   'user.update:before': { acceptedArgs: 1, description: 'Before updating user data' },
   'user.update:after': { acceptedArgs: 1, description: 'After user data is updated' },
   'user.delete:before': { acceptedArgs: 1, description: 'Before deleting user data' },
   'user.delete:after': { acceptedArgs: 1, description: 'After user data is deleted' },
+  'user.can:before': { acceptedArgs: 1, description: 'Before checking user capabilities' },
+  'user.can:after': { acceptedArgs: 1, description: 'After checking user capabilities' },
+  'user.can': { acceptedArgs: 1, description: 'On user capability check failure' },
   'userMeta.create:before': { acceptedArgs: 1, description: 'Before user meta is created' },
   'userMeta.create:after': { acceptedArgs: 1, description: 'After user meta is created' },
+  'userMeta.get': { acceptedArgs: 1, description: 'Before user meta is fetched' },
   'userMeta.get:before': { acceptedArgs: 1, description: 'Before user meta is fetched' },
   'userMeta.get:after': { acceptedArgs: 1, description: 'After user meta is fetched' },
   'userMeta.set:before': { acceptedArgs: 1, description: 'Before user meta is set' },
   'userMeta.set:after': { acceptedArgs: 1, description: 'After user meta is set' },
   'userMeta.delete:before': { acceptedArgs: 1, description: 'Before user meta is deleted' },
-  'userMeta.delete:after': { acceptedArgs: 1, description: 'After user meta is deleted' }
+  'userMeta.delete:after': { acceptedArgs: 1, description: 'After user meta is deleted' },
+  'userMeta.setRole:before': { acceptedArgs: 1, description: 'Before user role is set' },
+  'userMeta.setRole:after': { acceptedArgs: 1, description: 'After user role is set' },
 });

@@ -2,7 +2,7 @@ import { db, schema } from "../../db";
 import { eq, and } from 'drizzle-orm';
 import { serverHooks } from '../../../core/hooks/hookEngine.server';
 import type { NodePgDatabase, NodePgTransaction } from 'drizzle-orm/node-postgres';
-
+import { getRoles } from '../../../core/roles/roles';
 
 
 // Correctly define Db/Transaction types
@@ -135,4 +135,20 @@ export async function deleteUserMeta(userId: number, metaKey: string, dbClient: 
     ));
   await serverHooks.doAction('userMeta.delete:after', { userId, metaKey, result });
   return await serverHooks.applyFilters('userMeta.delete', result);
+}
+
+export async function setUserRole(userId: number, role: string, dbClient: DbOrTrx = db) {
+  await serverHooks.doAction('userMeta.setRole:before', { userId, role });
+  const roles = await getRoles(dbClient);
+  if (!roles[role]) throw new Error(`Role ${role} does not exist`);
+
+  await setUserMeta(userId, 'wp_capabilities', { [role]: true }, dbClient);
+  await serverHooks.doAction('userMeta.setRole:after', { userId, role });
+}
+
+export async function getUserRole(userId: number, dbClient: DbOrTrx = db): Promise<string | null> {
+  const meta = await getUserMeta(userId, 'wp_capabilities', dbClient);
+  if (meta.length === 0) return null;
+  const capabilities = meta[0].meta_value as Record<string, boolean>;
+  return Object.keys(capabilities).find(role => capabilities[role]) || null;
 }

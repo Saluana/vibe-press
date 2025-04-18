@@ -1,12 +1,9 @@
 import { wpError } from "../../core/utils/wpError";
 import { serverHooks } from "../../core/hooks/hookEngine.server";
-import { getUsers, createUser, getUserByLoginOrEmail, updateUser, deleteUser } from "../../core/services/user/user.services";
-import { getUserMeta, setUserMeta, deleteUserMeta } from "../../core/services/user/userMeta.services";
+import { getUsers } from "../../core/services/user/user.services";
 import { Router, Request, Response } from "express";
-import {toWpDatetime, fromWpDatetime} from '../../core/utils/wpTime';
-import { db, schema } from '../../core/db';
+
 import {z} from 'zod';
-// import { requireAuth, getCurrentUserId } from "../../core/middleware/auth"; // If you have auth helpers
 
 const router = Router();
 

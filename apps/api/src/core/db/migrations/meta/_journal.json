@@ -15,6 +15,13 @@
       "when": 1744863956011,
       "tag": "0001_tiny_the_watchers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1744995494760,
+      "tag": "0002_good_madame_hydra",
+      "breakpoints": true
     }
   ]
 }
