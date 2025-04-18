@@ -21,7 +21,7 @@ const LoginValidation = type({
   password: "string"
 });
 
- // @ts-expect-error
+// @ts-expect-error
 router.post('/register', async (req: Request, res: Response) => {
   const { username, email, password, display_name } = req.body;
 
@@ -56,24 +56,21 @@ router.post('/register', async (req: Request, res: Response) => {
       },
     });
   } catch (e: any) {
-    // Log the full error object for debugging
     console.error('Registration error:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
-  
-    // Try to find the code property in different places
+
     const code = e.code || (e.originalError && e.originalError.code);
-  
+
     if (code === '23505') {
-      serverHooks.doAction('user.register:error', { error: e });
-      // Unique constraint violation (username or email already exists)
+      serverHooks.doAction('user.create:error', { error: e });
       return res.status(409).json(wpError('23505', 'A user with that email or username already exists.'));
     }
 
-    serverHooks.doAction('user.register:error', { error: e });
+    serverHooks.doAction('user.create:error', { error: e });
     res.status(500).json(wpError('500', 'Failed to register user'));
   }
 });
 
- // @ts-expect-error
+// @ts-expect-error
 router.post('/login', async (req: Request, res: Response) => {
   const { username, password } = req.body;
 

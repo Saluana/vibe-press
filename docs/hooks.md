@@ -59,21 +59,38 @@ These are the hook points already wired into AstroPress core. Plugins and themes
 ### 🧍 User Registration/Login
 | Hook | When it fires |
 |------|----------------|
-| `user.register:before` | Before user is created in DB |
-| `user.register:after` | After user is created and token is issued |
-| `user.register:error` | On registration failure |
+| `user.create:before` | Before user is created in DB |
+| `user.create:after` | After user is created and token is issued |
+| `user.create:error` | On user creation failure |
 | `user.login:before` | Before login attempt |
 | `user.login:after` | After successful login |
 | `user.login:error` | On login failure |
-| `user.get:before` | Before fetching user data (e.g. in `/users`) |
-| `user.get:after` | After user data is returned |
 | `jwt.sign:before` | Before signing JWT |
 | `jwt.sign:after` | After JWT is signed |
 | `jwt.verify:before` | Before verifying JWT |
 | `jwt.verify:after` | After JWT is verified |
 
-*You can attach filters or actions to any of these to intercept, validate, or observe user activity.*
 
+### 🧍 User Meta
+| Hook | When it fires |
+|------|----------------|
+| `user.get:before` | Before user data is returned |
+| `user.get:after` | After user data is returned |
+| `user.update:before` | Before updating user data |
+| `user.update:after` | After user data is updated |
+| `user.delete:before` | Before deleting user data |
+| `user.delete:after` | After user data is deleted |
+| `userMeta.create:before` | Before user meta is created |
+| `userMeta.create:after` | After user meta is created |
+| `userMeta.get:before` | Before user meta is fetched |
+| `userMeta.get:after` | After user meta is fetched |
+| `userMeta.set:before` | Before user meta is set |
+| `userMeta.set:after` | After user meta is set |
+| `userMeta.delete:before` | Before user meta is deleted |
+| `userMeta.delete:after` | After user meta is deleted |
+
+
+*You can attach filters or actions to any of these to intercept, validate, or observe user activity.*
 ---
 
 ## 🔍 Internals
