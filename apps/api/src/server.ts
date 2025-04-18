@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import express, { Request, Response } from "express";
 import pg from "pg";
 import AuthRouter from "./api/rest/auth";
+import UserRouter from "./api/rest/users";
 import './core/plugins/banned-names';
 const { Pool } = pg;
 
@@ -36,6 +37,9 @@ app.get("/db-test", async (_req: Request, res: Response) => {
 
 // Auth endpoints
 app.use("/wp-json/wp/v2/", AuthRouter);
+
+// User endpoints
+app.use("/wp-json/wp/v2/", UserRouter);
 
 // Start server
 const port = parseInt(process.env.PORT || "4000", 10);
