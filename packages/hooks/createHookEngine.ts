@@ -1,9 +1,62 @@
 // packages/core/hooks/createWPHook.ts
 
 /**
- * AstroPress – Functional port of WordPress WP_Hook (TypeScript).
- * Zero fluff, full honesty. Entire file provided.
+ * AstroPress – Functional port of WordPress WP_Hook (TypeScript) **with an integrated
+ * type‑safe Hook Registry**.
+ *
+ * – Each hook **must** be declared through `defineHook()` (or via the convenience
+ *   `declareHooks()` helper) *before* it can be used by plugins.
+ * – `addFilter()`, `doAction()` and their async/sync variants validate the hook
+ *   name against the registry and throw if the hook is unknown.
+ * – Developers get compile‑time safety via the exported `HookName` union type.
+ * – Docs/IDE autocompletion come from `export const hookRegistry` which is the
+ *   single source of truth for names and expected argument count.
  */
+
+/* ─────────────────────────────────────────────────────────── */
+/* 1 ▸ Registry primitives                                       */
+
+// Shape stored for each hook.
+interface HookSpec<Args extends any[] = any[]> {
+  /** Human‑readable description (optional but recommended) */
+  description?: string;
+  /** Expected total argument count when *calling* the hook. */
+  acceptedArgs: number;
+}
+
+// The central immutable registry (filled only through declareHooks / defineHook).
+export const hookRegistry: Record<string, HookSpec> = {};
+
+/**
+ * Register a single hook.
+ * Call this during application bootstrap – *never* from within a request.
+ */
+export function defineHook<Args extends any[] = any[]>(
+  name: string,
+  acceptedArgs: number,
+  description?: string
+): void {
+  if (hookRegistry[name]) {
+    throw new Error(`[HookRegistry] Hook '${name}' already defined.`);
+  }
+  hookRegistry[name] = { acceptedArgs, description } as HookSpec<Args>;
+}
+
+/**
+ * Convenience helper to register many hooks at once with literal inference.
+ */
+export function declareHooks<const H extends Record<string, HookSpec>>(specs: H): void {
+  (Object.keys(specs) as (keyof H)[]).forEach(name => {
+    // @ts-ignore – we know the key is string
+    defineHook(name, specs[name].acceptedArgs, specs[name].description);
+  });
+}
+
+// After at least one hook is declared, TypeScript derives the union.
+export type HookName = keyof typeof hookRegistry;
+
+/* ─────────────────────────────────────────────────────────── */
+/* 2 ▸ Callback bookkeeping                                     */
 
 type Callback = (...args: any[]) => any;
 
@@ -12,51 +65,54 @@ interface CallbackEntry {
   acceptedArgs: number;
 }
 
+/* ─────────────────────────────────────────────────────────── */
+/* 3 ▸ Public API shape                                         */
+
 export interface HookAPI {
   addFilter(
-    hookName: string,
+    hookName: HookName,
     callback: Callback,
     priority?: number,
     acceptedArgs?: number
   ): void;
   removeFilter(
-    hookName: string,
+    hookName: HookName,
     callback: Callback,
     priority?: number
   ): boolean;
-  hasFilter(hookName?: string, callback?: Callback): boolean | number;
+  hasFilter(hookName?: HookName, callback?: Callback): boolean | number;
   hasFilters(): boolean;
   removeAllFilters(priority?: number): void;
-  applyFiltersSync<T>(hookName: string, value: T, ...args: any[]): T;
-  applyFilters<T>(hookName: string, value: T, ...args: any[]): Promise<T>;
-  doActionSync(hookName: string, ...args: any[]): void;
-  doAction(hookName: string, ...args: any[]): Promise<void>;
+  applyFiltersSync<T>(hookName: HookName, value: T, ...args: any[]): T;
+  applyFilters<T>(hookName: HookName, value: T, ...args: any[]): Promise<T>;
+  doActionSync(hookName: HookName, ...args: any[]): void;
+  doAction(hookName: HookName, ...args: any[]): Promise<void>;
   doAllHook(args: any[]): void;
   currentPriority(): number | false;
 }
 
 /* ─────────────────────────────────────────────────────────── */
-/* Shared utilities (module‑level) */
+/* 4 ▸ Utilities shared by all engines                          */
 
 const fnIds = new WeakMap<Callback, number>();
 let globalUid = 0;
 
-function buildUniqueId(
-  hookName: string,
-  callback: Callback,
-  priority: number
-): string {
-  /* WeakMap ensures 1‑to‑1 id per function */
-  if (!fnIds.has(callback)) {
-    fnIds.set(callback, ++globalUid);
+function buildUniqueId(hook: string, cb: Callback, prio: number): string {
+  if (!fnIds.has(cb)) fnIds.set(cb, ++globalUid);
+  return `${hook}:${prio}:${fnIds.get(cb)}`;
+}
+
+function ensureKnownHook(hookName: string): asserts hookName is HookName {
+  if (!hookRegistry[hookName]) {
+    throw new Error(`[Hooks] Unknown hook '${hookName}'. Did you call defineHook()?`);
   }
-  return `${hookName}:${priority}:${fnIds.get(callback)}`;
 }
 
 /* ─────────────────────────────────────────────────────────── */
-/* Factory (creates one hook instance and returns API.)        */
+/* 5 ▸ Engine factory                                           */
 
 export function createHookEngine(): HookAPI {
+  /** callbacks[priority][uid] → {fn, acceptedArgs} */
   const callbacks: Record<number, Record<string, CallbackEntry>> = {};
   let priorities: number[] = [];
 
@@ -65,41 +121,34 @@ export function createHookEngine(): HookAPI {
   let nestingLevel = 0;
   let doingAction = false;
 
-  /* ───── internal helpers ───── */
-
-  function updatePriorities(): void {
+  /* internal helpers */
+  const updatePriorities = () => {
     priorities = Object.keys(callbacks)
       .map(Number)
       .sort((a, b) => a - b);
-  }
+  };
 
-  function resortActiveIterations(
+  const resortActiveIterations = (
     newPriority?: number,
     priorityExisted = false
-  ): void {
+  ) => {
     const newPriorities = [...priorities];
-
     if (newPriorities.length === 0) {
       iterations.forEach((_, i) => (iterations[i] = []));
       return;
     }
-
     const min = Math.min(...newPriorities);
-
     iterations.forEach((iteration, idx) => {
       const current = iteration[0] ?? null;
       iterations[idx] = [...newPriorities];
-
       if (current === null) return;
       if (current < min) {
         iterations[idx].unshift(current);
         return;
       }
-
       while (iterations[idx][0] < current && iterations[idx].length) {
         iterations[idx].shift();
       }
-
       if (
         newPriority !== undefined &&
         newPriority === currentPriority[idx] &&
@@ -109,16 +158,18 @@ export function createHookEngine(): HookAPI {
         if (prev !== newPriority) iterations[idx].unshift(prev!);
       }
     });
-  }
+  };
 
   /* ───── public API implementation ───── */
 
   function addFilter(
-    hookName: string,
+    hookName: HookName,
     callback: Callback,
     priority = 10,
     acceptedArgs = callback.length
   ): void {
+    ensureKnownHook(hookName);
+
     const uid = buildUniqueId(hookName, callback, priority);
     const priorityExisted = callbacks.hasOwnProperty(priority);
 
@@ -126,22 +177,19 @@ export function createHookEngine(): HookAPI {
     callbacks[priority][uid] = { fn: callback, acceptedArgs };
     updatePriorities();
 
-    if (nestingLevel > 0) {
-      resortActiveIterations(priority, priorityExisted);
-    }
+    if (nestingLevel > 0) resortActiveIterations(priority, priorityExisted);
   }
 
   function removeFilter(
-    hookName: string,
+    hookName: HookName,
     callback: Callback,
     priority = 10
   ): boolean {
+    ensureKnownHook(hookName);
     const uid = buildUniqueId(hookName, callback, priority);
     const exists = !!(callbacks[priority] && callbacks[priority][uid]);
     if (!exists) return false;
-
     delete callbacks[priority][uid];
-
     if (Object.keys(callbacks[priority]).length === 0) {
       delete callbacks[priority];
       updatePriorities();
@@ -150,9 +198,11 @@ export function createHookEngine(): HookAPI {
     return true;
   }
 
-  function hasFilter(hookName = '', callback?: Callback): boolean | number {
-    if (!callback) return hasFilters();
+  const hasFilters = (): boolean => priorities.length > 0;
 
+  function hasFilter(hookName: HookName = '' as HookName, callback?: Callback): boolean | number {
+    ensureKnownHook(hookName);
+    if (!callback) return hasFilters();
     const partial = buildUniqueId(hookName, callback, 0).split(':').slice(-1)[0];
     for (const [prio, group] of Object.entries(callbacks)) {
       if (Object.keys(group).some(key => key.endsWith(partial))) {
@@ -160,10 +210,6 @@ export function createHookEngine(): HookAPI {
       }
     }
     return false;
-  }
-
-  function hasFilters(): boolean {
-    return priorities.length > 0;
   }
 
   function removeAllFilters(priority?: number): void {
@@ -174,13 +220,12 @@ export function createHookEngine(): HookAPI {
       delete callbacks[priority];
       updatePriorities();
     }
-
     if (nestingLevel > 0) resortActiveIterations();
   }
 
-  // Only apply filters for a specific hook
-  function applyFiltersSync<T>(hookName: string, value: T, ...args: any[]): T {
-    // no callbacks for this hook?
+  // sync filter
+  function applyFiltersSync<T>(hookName: HookName, value: T, ...args: any[]): T {
+    ensureKnownHook(hookName);
     const prios = priorities.filter(prio =>
       Object.keys(callbacks[prio] || {}).some(uid => uid.startsWith(hookName + ':'))
     );
@@ -194,109 +239,70 @@ export function createHookEngine(): HookAPI {
     do {
       currentPriority[level] = iterations[level][0];
       const prio = currentPriority[level];
-
-      // only callbacks for this hook
-      for (const [uid, {fn, acceptedArgs}] of Object.entries(callbacks[prio] || {})) {
+      for (const [uid, { fn, acceptedArgs }] of Object.entries(callbacks[prio] || {})) {
         if (!uid.startsWith(hookName + ':')) continue;
-        console.log('DEBUG: Calling filter', fn.name || '<anon>', 'with args:', [result, ...args].slice(0, acceptedArgs));
-        if (!doingAction) args[0] = result;
-
-        if (acceptedArgs === 0) {
-          result = fn();
-        } else if (acceptedArgs >= numArgsTotal) {
-          result = fn(result, ...args);
-        } else {
-          result = fn(...[result, ...args].slice(0, acceptedArgs));
-        }
+        if (acceptedArgs === 0) result = fn();
+        else if (acceptedArgs >= numArgsTotal) result = fn(result, ...args);
+        else result = fn(...[result, ...args].slice(0, acceptedArgs));
       }
-    } while (
-      iterations[level].shift() !== undefined &&
-      iterations[level].length
-    );
+    } while (iterations[level].shift() !== undefined && iterations[level].length);
 
     delete iterations[level];
     delete currentPriority[level];
     nestingLevel--;
-
     return result;
   }
 
-  // Fire action hooks: only payload to applyFiltersSync, keyed by hookName
-  function doActionSync(hookName: string, ...args: any[]): void {
+  // async filter
+  async function applyFilters<T>(hookName: HookName, value: T, ...args: any[]): Promise<T> {
+    ensureKnownHook(hookName);
+    const prios = priorities.filter(prio =>
+      Object.keys(callbacks[prio] || {}).some(uid => uid.startsWith(hookName + ':'))
+    );
+    if (prios.length === 0) return value;
+    let result: any = value;
+    const numArgsTotal = args.length + 1;
+    for (const prio of prios) {
+      for (const [uid, { fn, acceptedArgs }] of Object.entries(callbacks[prio] || {})) {
+        const uidHookName = uid.split(':').slice(0, -2).join(':');
+        if (uidHookName !== hookName) continue;
+        if (acceptedArgs === 0) result = await fn();
+        else if (acceptedArgs >= numArgsTotal) result = await fn(result, ...args);
+        else result = await fn(...[result, ...args].slice(0, acceptedArgs));
+      }
+    }
+    return result;
+  }
+
+  function doActionSync(hookName: HookName, ...args: any[]): void {
     doingAction = true;
-    // run all filters for this hook, no return value needed
     applyFiltersSync<void>(hookName, undefined as any, ...args);
     if (nestingLevel === 0) doingAction = false;
   }
 
-  // Async versions: default async applyFilters/doAction
-  async function applyFilters<T>(hookName: string, value: T, ...args: any[]): Promise<T> {
-    const prios = priorities.filter(prio =>
-      Object.keys(callbacks[prio] || {}).some(uid => uid.startsWith(hookName + ':'))
-    );
-    if (prios.length === 0) {
-        console.log(`DEBUG [applyFilters]: No filters found for hook '${hookName}'. Returning original value:`, JSON.stringify(value));
-        return value; // Should return the user object here for 'user.create'
-    }
-
-    let result: any = value;
-    const numArgsTotal = args.length + 1;
-    for (const prio of prios) {
-      for (const [uid, {fn, acceptedArgs}] of Object.entries(callbacks[prio] || {})) {
-        // --- BEGIN PROPOSED CHANGE ---
-        // OLD check: if (!uid.startsWith(hookName + ':')) continue;
-
-        // NEW check: Extract hook name from UID and compare for exact match
-        const uidParts = uid.split(':');
-        // Handle potential colons in hook names by taking all parts except the last two (priority, fnId)
-        const uidHookName = uidParts.slice(0, -2).join(':');
-        if (uidHookName !== hookName) continue; // Only process filters for the exact hookName
-        // --- END PROPOSED CHANGE ---
-
-        console.log(`DEBUG [applyFilters]: Calling filter for hook '${hookName}' (UID: ${uid}) with value:`, JSON.stringify(result));
-        if (acceptedArgs === 0) {
-          result = await fn();
-        } else if (acceptedArgs >= numArgsTotal) {
-          result = await fn(result, ...args);
-        } else {
-          result = await fn(...[result, ...args].slice(0, acceptedArgs));
-        }
-        console.log(`DEBUG [applyFilters]: Filter for hook '${hookName}' (UID: ${uid}) returned:`, JSON.stringify(result));
-      }
-    }
-    console.log(`DEBUG [applyFilters]: Finished applying filters for hook '${hookName}'. Final result:`, JSON.stringify(result));
-    return result;
-  }
-
-  async function doAction(hookName: string, ...args: any[]): Promise<void> {
+  const doAction = async (hookName: HookName, ...args: any[]): Promise<void> => {
     await applyFilters<void>(hookName, undefined as any, ...args);
-  }
+  };
 
   function doAllHook(args: any[]): void {
     const level = nestingLevel++;
     iterations[level] = [...priorities];
-
     do {
       const prio = iterations[level][0];
       for (const { fn } of Object.values(callbacks[prio])) {
         fn(...args);
       }
-    } while (
-      iterations[level].shift() !== undefined &&
-      iterations[level].length
-    );
-
+    } while (iterations[level].shift() !== undefined && iterations[level].length);
     delete iterations[level];
     nestingLevel--;
   }
 
-  function currentPrio(): number | false {
+  const currentPrio = (): number | false => {
     const top = iterations[0];
     return top && top.length ? top[0] : false;
-  }
+  };
 
   /* ───── exposed API object ───── */
-
   return {
     addFilter,
     removeFilter,
@@ -311,3 +317,35 @@ export function createHookEngine(): HookAPI {
     currentPriority: currentPrio
   };
 }
+
+// Register hooks (declarative)
+declareHooks({
+  // 🧍 User Registration/Login
+  'user.create': { acceptedArgs: 1, description: 'Before user is created in DB' },
+  'user.create:before': { acceptedArgs: 1, description: 'Before user is created in DB' },
+  'user.create:after': { acceptedArgs: 1, description: 'After user is created and token is issued' },
+  'user.create:error': { acceptedArgs: 1, description: 'On user creation failure' },
+  'user.login:before': { acceptedArgs: 1, description: 'Before login attempt' },
+  'user.login:after': { acceptedArgs: 2, description: 'After successful login' },
+  'user.login:error': { acceptedArgs: 1, description: 'On login failure' },
+  'jwt.sign:before': { acceptedArgs: 1, description: 'Before signing JWT' },
+  'jwt.sign:after': { acceptedArgs: 2, description: 'After JWT is signed' },
+  'jwt.verify:before': { acceptedArgs: 1, description: 'Before verifying JWT' },
+  'jwt.verify:after': { acceptedArgs: 2, description: 'After JWT is verified' },
+
+  // 🧍 User Meta
+  'user.get:before': { acceptedArgs: 1, description: 'Before user data is returned' },
+  'user.get:after': { acceptedArgs: 1, description: 'After user data is returned' },
+  'user.update:before': { acceptedArgs: 1, description: 'Before updating user data' },
+  'user.update:after': { acceptedArgs: 1, description: 'After user data is updated' },
+  'user.delete:before': { acceptedArgs: 1, description: 'Before deleting user data' },
+  'user.delete:after': { acceptedArgs: 1, description: 'After user data is deleted' },
+  'userMeta.create:before': { acceptedArgs: 1, description: 'Before user meta is created' },
+  'userMeta.create:after': { acceptedArgs: 1, description: 'After user meta is created' },
+  'userMeta.get:before': { acceptedArgs: 1, description: 'Before user meta is fetched' },
+  'userMeta.get:after': { acceptedArgs: 1, description: 'After user meta is fetched' },
+  'userMeta.set:before': { acceptedArgs: 1, description: 'Before user meta is set' },
+  'userMeta.set:after': { acceptedArgs: 1, description: 'After user meta is set' },
+  'userMeta.delete:before': { acceptedArgs: 1, description: 'Before user meta is deleted' },
+  'userMeta.delete:after': { acceptedArgs: 1, description: 'After user meta is deleted' }
+});
