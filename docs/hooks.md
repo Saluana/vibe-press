@@ -67,6 +67,10 @@ These are the hook points already wired into AstroPress core. Plugins and themes
 | `user.login:error` | On login failure |
 | `user.get:before` | Before fetching user data (e.g. in `/users`) |
 | `user.get:after` | After user data is returned |
+| `jwt.sign:before` | Before signing JWT |
+| `jwt.sign:after` | After JWT is signed |
+| `jwt.verify:before` | Before verifying JWT |
+| `jwt.verify:after` | After JWT is verified |
 
 *You can attach filters or actions to any of these to intercept, validate, or observe user activity.*
 

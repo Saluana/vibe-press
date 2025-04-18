@@ -37,8 +37,6 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 
   try {
-    serverHooks.doAction('user.register:before', { username, email, display_name });
-
     const user = await createUser({
       user_login: username,
       user_email: email,
@@ -47,8 +45,6 @@ router.post('/register', async (req: Request, res: Response) => {
     });
 
     const token = signJwt(user.ID);
-
-    serverHooks.doAction('user.register:after', { user, token });
 
     res.status(201).json({
       token,
@@ -67,6 +63,7 @@ router.post('/register', async (req: Request, res: Response) => {
     const code = e.code || (e.originalError && e.originalError.code);
   
     if (code === '23505') {
+      serverHooks.doAction('user.register:error', { error: e });
       // Unique constraint violation (username or email already exists)
       return res.status(409).json(wpError('23505', 'A user with that email or username already exists.'));
     }
@@ -90,9 +87,7 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 
   try {
-    serverHooks.doAction('user.login:before', { username });
     const { user, token } = await authenticateUsernamePassword(username, password);
-    serverHooks.doAction('user.login:after', { user, token });
 
     res.status(200).json({
       token,

@@ -3,6 +3,7 @@ import { db, schema } from '../../db';
 import { hashPassword } from '../auth.services';
 import { eq, or } from 'drizzle-orm';
 import { createUserMetaDefaults } from './userMeta.services';
+import { serverHooks } from '../../../core/hooks/hookEngine.server';
 
 
 export async function createUser({
@@ -16,6 +17,8 @@ export async function createUser({
   user_pass: string;
   display_name: string;
 }) {
+  serverHooks.doAction('user.register:before', { user_login, user_email, display_name });
+
   const hashed = await hashPassword(user_pass);
 
   const result = await db.insert(schema.wp_users).values({
@@ -34,10 +37,12 @@ export async function createUser({
     nickname: display_name,
   });
 
+  serverHooks.doAction('user.register:after', { user: result[0] });
   return result[0];
 }
 
 export async function getUserByLoginOrEmail(identifier: string) {
+  serverHooks.doAction('user.get:before', { identifier });
   // Try to find user by login or email
   const result = await db.select().from(schema.wp_users)
     .where(
@@ -46,6 +51,7 @@ export async function getUserByLoginOrEmail(identifier: string) {
         eq(schema.wp_users.user_email, identifier)
       )
     );
+  serverHooks.doAction('user.get:after', { user: result[0] });
   return result[0] || null;
 }
 
