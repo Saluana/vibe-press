@@ -4,6 +4,7 @@ import { createUser } from '../../core/services/user/user.services';
 import { signJwt, loginUser } from '../../core/services/auth.services';
 import { type } from 'arktype';
 import { wpError } from '../../core/utils/wpError';
+import { serverHooks } from '../../core/hooks/hookEngine.server';
 
 const router = Router();
 
@@ -36,6 +37,8 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 
   try {
+    serverHooks.doAction('user.register:before', { username, email, password, display_name });
+
     const user = await createUser({
       user_login: username,
       user_email: email,
@@ -44,6 +47,8 @@ router.post('/register', async (req: Request, res: Response) => {
     });
 
     const token = signJwt(user.ID);
+
+    serverHooks.doAction('user.register:after', { user, token });
 
     res.status(201).json({
       token,
@@ -65,7 +70,8 @@ router.post('/register', async (req: Request, res: Response) => {
       // Unique constraint violation (username or email already exists)
       return res.status(409).json(wpError('23505', 'A user with that email or username already exists.'));
     }
-  
+
+    serverHooks.doAction('user.register:error', { error: e });
     res.status(500).json(wpError('500', 'Failed to register user'));
   }
 });
@@ -84,7 +90,9 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 
   try {
+    serverHooks.doAction('user.login:before', { username });
     const { user, token } = await loginUser(username, password);
+    serverHooks.doAction('user.login:after', { user, token });
 
     res.status(200).json({
       token,
@@ -96,6 +104,7 @@ router.post('/login', async (req: Request, res: Response) => {
       },
     });
   } catch (e: any) {
+    serverHooks.doAction('user.login:error', { error: e });
     res.status(500).json(wpError('500', 'Failed to login'));
   }
 });
@@ -105,6 +114,7 @@ router.get('/users',  async (req: Request, res: Response) => {
   // Only accessible if Basic Auth is valid
   // Optionally, check req.query.context === 'edit' to mimic WP behavior
   const user = (req as any).user;
+  serverHooks.doAction('user.get:before', { user });
   res.json({
     id: user.ID,
     username: user.user_login,
@@ -112,6 +122,7 @@ router.get('/users',  async (req: Request, res: Response) => {
     display_name: user.display_name,
     // Add more fields as needed
   });
+  serverHooks.doAction('user.get:after', { user });
 });
 
 export default router;
