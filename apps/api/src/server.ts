@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import express, { Request, Response } from "express";
 import pg from "pg";
 import AuthRouter from "./api/rest/auth";
+import './core/plugins/banned-names';
 const { Pool } = pg;
 
 // Load environment variables

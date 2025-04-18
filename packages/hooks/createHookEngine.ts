@@ -27,8 +27,8 @@ export interface HookAPI {
   hasFilter(hookName?: string, callback?: Callback): boolean | number;
   hasFilters(): boolean;
   removeAllFilters(priority?: number): void;
-  applyFilters<T>(value: T, ...args: any[]): T;
-  doAction(...args: any[]): void;
+  applyFilters<T>(hookName: string, value: T, ...args: any[]): T;
+  doAction(hookName: string, ...args: any[]): void;
   doAllHook(args: any[]): void;
   currentPriority(): number | false;
 }
@@ -176,19 +176,27 @@ export function createHookEngine(): HookAPI {
     if (nestingLevel > 0) resortActiveIterations();
   }
 
-  function applyFilters<T>(value: T, ...args: any[]): T {
-    if (priorities.length === 0) return value;
+  // Only apply filters for a specific hook
+  function applyFilters<T>(hookName: string, value: T, ...args: any[]): T {
+    // no callbacks for this hook?
+    const prios = priorities.filter(prio =>
+      Object.keys(callbacks[prio] || {}).some(uid => uid.startsWith(hookName + ':'))
+    );
+    if (prios.length === 0) return value;
 
     const level = nestingLevel++;
-    iterations[level] = [...priorities];
+    iterations[level] = [...prios];
     let result: any = value;
-    const numArgsTotal = args.length + 1; // includes value
+    const numArgsTotal = args.length + 1;
 
     do {
       currentPriority[level] = iterations[level][0];
       const prio = currentPriority[level];
 
-      for (const { fn, acceptedArgs } of Object.values(callbacks[prio])) {
+      // only callbacks for this hook
+      for (const [uid, {fn, acceptedArgs}] of Object.entries(callbacks[prio] || {})) {
+        if (!uid.startsWith(hookName + ':')) continue;
+        console.log('DEBUG: Calling filter', fn.name || '<anon>', 'with args:', [result, ...args].slice(0, acceptedArgs));
         if (!doingAction) args[0] = result;
 
         if (acceptedArgs === 0) {
@@ -211,9 +219,11 @@ export function createHookEngine(): HookAPI {
     return result;
   }
 
-  function doAction(...args: any[]): void {
+  // Fire action hooks: only payload to applyFilters, keyed by hookName
+  function doAction(hookName: string, ...args: any[]): void {
     doingAction = true;
-    applyFilters<void>(undefined as any, ...args); // eslint-disable-line @typescript-eslint/no-explicit-any
+    // run all filters for this hook, no return value needed
+    applyFilters<void>(hookName, undefined as any, ...args);
     if (nestingLevel === 0) doingAction = false;
   }
 
