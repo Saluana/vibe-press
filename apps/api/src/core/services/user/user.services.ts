@@ -187,7 +187,6 @@ export async function getUsers(params: GetUsersParams) {
   let queryBuilder: any = db.select({
     id: schema.wp_users.ID,
     user_login: schema.wp_users.user_login,
-    user_pass: schema.wp_users.user_pass,
     user_nicename: schema.wp_users.user_nicename,
     user_email: schema.wp_users.user_email,
     user_url: schema.wp_users.user_url,

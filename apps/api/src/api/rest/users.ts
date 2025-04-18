@@ -110,6 +110,7 @@ router.get('/users', async (req: Request, res: Response) => {
   
     try {
       const users = await getUsers(queryParams);
+
       return res.json(users); // optionally wrap this for WP shape
     } catch (err: any) {
       await serverHooks.doAction('users.get:error', { error: err });
