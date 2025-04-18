@@ -1,6 +1,7 @@
 import { wpError } from "../../core/utils/wpError";
 import { serverHooks } from "../../core/hooks/hookEngine.server";
-import { getUsers } from "../../core/services/user/user.services";
+import { getUsers, updateUser } from "../../core/services/user/user.services";
+import {setUserMeta} from "../../core/services/user/userMeta.services";
 import { Router, Request, Response } from "express";
 
 import {z} from 'zod';
@@ -154,6 +155,64 @@ router.get('/users', async (req: Request, res: Response) => {
   }
 });
   
-  
+// Update a specific user
+// @ts-expect-error - Router typing issue, similar to GET route
+router.post('/users/:id', async (req: Request, res: Response) => {
+    const userId = parseInt(req.params.id, 10);
+    if (isNaN(userId)) {
+        return res.status(400).json(wpError('invalid_user_id', 'Invalid user ID.', 400));
+    }
+
+    const validationResult = UpdateUserValidation.safeParse(req.body);
+
+    if (!validationResult.success) {
+        return res.status(400).json(wpError('invalid_param', 'Invalid parameter(s).', 400, {
+            invalid_params: validationResult.error.flatten().fieldErrors
+        }));
+    }
+
+    // Explicitly exclude password from update data for now
+    const { password, ...userData } = validationResult.data;
+
+    if (Object.keys(userData).length === 0) {
+        return res.status(400).json(wpError('no_data', 'No data provided for update.', 400));
+    }
+
+    try {
+        // Map REST API fields to DB fields for the service
+        const dbUpdateData: any = {}; // Use 'any' for now, or define a proper DB update type
+        if (userData.username !== undefined) dbUpdateData.user_login = userData.username;
+        if (userData.name !== undefined) dbUpdateData.display_name = userData.name;
+        if (userData.first_name !== undefined) dbUpdateData.first_name = userData.first_name; // Assuming direct mapping or handled by service
+        if (userData.last_name !== undefined) dbUpdateData.last_name = userData.last_name; // Assuming direct mapping or handled by service
+        if (userData.email !== undefined) dbUpdateData.user_email = userData.email;
+        if (userData.url !== undefined) dbUpdateData.user_url = userData.url;
+        if (userData.description !== undefined) dbUpdateData.description = userData.description; // Assuming direct mapping or handled by service
+        if (userData.nickname !== undefined) dbUpdateData.nickname = userData.nickname; // Assuming direct mapping or handled by service
+        if (userData.slug !== undefined) dbUpdateData.user_nicename = userData.slug; // WP uses user_nicename for slug
+        // locale, roles, meta might need specific handling in updateUser service
+        if (userData.locale !== undefined) dbUpdateData.locale = userData.locale;
+        if (userData.roles !== undefined) dbUpdateData.roles = userData.roles; // Pass roles through, service needs to handle
+        if (userData.meta !== undefined) dbUpdateData.meta = userData.meta; // Pass meta through, service needs to handle
+
+        // TODO: Add capability checks (e.g., 'edit_users' or editing self)
+        const updatedUser = await updateUser(userId, dbUpdateData);
+        if (!updatedUser) {
+            return res.status(404).json(wpError('rest_user_invalid_id', 'Invalid user ID.', 404));
+        }
+
+        const wpUser = mapUserToWP(updatedUser);
+        await serverHooks.doAction('user.update:success', { user: updatedUser });
+        return res.json(wpUser);
+    } catch (err: any) {
+        console.error(`Error updating user ${userId}:`, err);
+        await serverHooks.doAction('user.update:error', { error: err, userId });
+        // Handle potential specific errors like duplicate username/email if needed
+        if (err.code === '...') { // Example: Check for specific DB errors
+            // return res.status(400).json(wpError('existing_user_login', 'Username already exists.', 400));
+        }
+        return res.status(500).json(wpError('rest_user_update_failed', err.message || 'Could not update user.', 500));
+    }
+});
 
 export default router;
