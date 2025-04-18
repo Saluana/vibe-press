@@ -2,7 +2,7 @@
 import { db, schema } from '../../db';
 import { hashPassword } from '../auth.services';
 import { sql, and, or, like, eq, inArray } from 'drizzle-orm';
-import { createUserMetaDefaults } from './userMeta.services';
+import { createUserMetaDefaults, setUserMeta, setUserRole } from './userMeta.services';
 import { serverHooks } from '../../../core/hooks/hookEngine.server';
 import { PgSelect } from 'drizzle-orm/pg-core';
 
@@ -82,37 +82,104 @@ export async function getUserByLoginOrEmail(identifier: string, dbClient: DbOrTr
 }
 
 /**
- * Update user information.
+ * Update user information, including roles and metadata.
  *
  * @param {number} userId - The ID of the user.
- * @param {Object} updates - The fields to update.
- * @param {string} [updates.user_login]
- * @param {string} [updates.user_email]
- * @param {string} [updates.user_pass]
- * @param {string} [updates.display_name]
- * @param {string} [updates.user_url]
- * @param {number} [updates.user_status]
+ * @param {Object} updates - The fields to update, potentially including standard user fields, roles, and meta.
+ * @param {DbOrTrx} [dbClient=db] - Optional database client or transaction.
  * @returns {Promise<Object|null>} The updated user record.
  */
-export async function updateUser(userId: number, updates: {
-  user_login?: string;
-  user_email?: string;
-  user_pass?: string;
-  display_name?: string;
-  user_url?: string;
-  user_status?: number;
-}, dbClient: DbOrTrx = db) {
+export async function updateUser(userId: number, updates: Record<string, any>, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('user.update:before', { userId, updates });
-  const data: any = { ...updates };
-  if (updates.user_pass) {
-    data.user_pass = await hashPassword(updates.user_pass);
+
+  // Separate standard fields, roles, and meta
+  const {
+    roles,
+    meta,
+    // Extract potential meta fields passed directly in updates
+    first_name,
+    last_name,
+    nickname,
+    description,
+    locale,
+    ...standardUpdates // Remaining fields intended for wp_users
+   } = updates;
+
+  const userTableFields: Partial<typeof schema.wp_users.$inferInsert> = {};
+  const metaUpdates: Record<string, any> = meta || {}; // Initialize metaUpdates with passed meta object
+
+  // --- Map standard updates to wp_users fields ---
+  if (standardUpdates.user_login !== undefined) userTableFields.user_login = standardUpdates.user_login;
+  if (standardUpdates.user_email !== undefined) userTableFields.user_email = standardUpdates.user_email;
+  if (standardUpdates.display_name !== undefined) userTableFields.display_name = standardUpdates.display_name;
+  if (standardUpdates.user_url !== undefined) userTableFields.user_url = standardUpdates.user_url;
+  if (standardUpdates.user_status !== undefined) userTableFields.user_status = standardUpdates.user_status;
+  // Handle slug mapping (user_nicename in DB)
+  if (standardUpdates.user_nicename !== undefined) userTableFields.user_nicename = standardUpdates.user_nicename;
+  // Handle password hashing if present
+  if (standardUpdates.user_pass) {
+      userTableFields.user_pass = await hashPassword(standardUpdates.user_pass);
   }
-  const result = await dbClient.update(schema.wp_users)
-    .set(data)
-    .where(eq(schema.wp_users.ID, userId))
-    .returning();
-  await serverHooks.doAction('user.update:after', { user: result[0] });
-  return await serverHooks.applyFilters('user.update', result[0] || null);
+
+  // --- Add fields intended for usermeta to the metaUpdates object ---
+  if (first_name !== undefined) metaUpdates.first_name = first_name;
+  if (last_name !== undefined) metaUpdates.last_name = last_name;
+  if (nickname !== undefined) metaUpdates.nickname = nickname;
+  if (description !== undefined) metaUpdates.description = description;
+  if (locale !== undefined) metaUpdates.locale = locale;
+
+  let updatedUserResult: (typeof schema.wp_users.$inferSelect)[] = [];
+
+  // Use a transaction for atomicity
+  await dbClient.transaction(async (trx) => {
+      // 1. Update wp_users table if there are fields to update
+      if (Object.keys(userTableFields).length > 0) {
+           const result = await trx.update(schema.wp_users)
+              .set(userTableFields)
+              .where(eq(schema.wp_users.ID, userId))
+              .returning();
+           if (result.length > 0) {
+             updatedUserResult = result;
+           } else if (Object.keys(metaUpdates).length === 0 && !roles) {
+               // Only throw if nothing else is being updated
+               throw new Error(`User with ID ${userId} not found for update.`);
+           }
+      }
+
+       // Fetch user data if only meta/roles updated OR if wp_users update failed but we continue
+       if(updatedUserResult.length === 0 && (Object.keys(metaUpdates).length > 0 || roles)) {
+         const existingUser = await trx.select().from(schema.wp_users).where(eq(schema.wp_users.ID, userId));
+         if (existingUser.length === 0) {
+            throw new Error(`User with ID ${userId} not found.`);
+         }
+         updatedUserResult = existingUser; // Use existing user data to return
+       }
+
+       if (updatedUserResult.length === 0) {
+         // Should not happen if logic above is correct, but safeguard
+         throw new Error(`Failed to find or update user with ID ${userId}.`);
+       }
+
+      // 2. Update roles if provided
+      if (roles && Array.isArray(roles) && roles.length > 0) {
+          // WP REST API allows multiple roles, but wp_capabilities typically stores one primary.
+          // Use the first role provided as the primary role.
+          const primaryRole = roles[0];
+          await setUserRole(userId, primaryRole, trx); // Pass transaction client
+      }
+
+      // 3. Update meta fields if provided
+      if (Object.keys(metaUpdates).length > 0) {
+          for (const [key, value] of Object.entries(metaUpdates)) {
+              await setUserMeta(userId, key, value, trx); // Pass transaction client
+          }
+      }
+  }); // End transaction
+
+  const finalUser = updatedUserResult[0] || null; // Should always have a user if transaction succeeded
+
+  await serverHooks.doAction('user.update:after', { user: finalUser });
+  return await serverHooks.applyFilters('user.update', finalUser);
 }
 
 /**

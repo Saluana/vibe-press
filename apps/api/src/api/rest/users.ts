@@ -1,7 +1,7 @@
 import { wpError } from "../../core/utils/wpError";
 import { serverHooks } from "../../core/hooks/hookEngine.server";
 import { getUsers, updateUser } from "../../core/services/user/user.services";
-import {setUserMeta} from "../../core/services/user/userMeta.services";
+import {setUserMeta, setUserRole} from "../../core/services/user/userMeta.services";
 import { Router, Request, Response } from "express";
 
 import {z} from 'zod';
