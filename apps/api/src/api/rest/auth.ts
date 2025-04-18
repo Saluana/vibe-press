@@ -44,6 +44,13 @@ router.post('/register', async (req: Request, res: Response) => {
       display_name: display_name || username,
     });
 
+    console.log('DEBUG [auth]: Received user from createUser:', JSON.stringify(user));
+
+    if (!user || typeof user.ID === 'undefined') {
+      console.error('ERROR [auth]: Invalid user object received from createUser:', JSON.stringify(user));
+      throw new Error(`Invalid user object received after creation: ${JSON.stringify(user)}`);
+    }
+
     const token = signJwt(user.ID);
 
     res.status(201).json({
@@ -55,18 +62,30 @@ router.post('/register', async (req: Request, res: Response) => {
         display_name: user.display_name,
       },
     });
+    console.log('DEBUG [auth]: Successfully sent 201 response.');
   } catch (e: any) {
-    console.error('Registration error:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
-
+    console.error('ERROR [auth] caught in /register:', e);
     const code = e.code || (e.originalError && e.originalError.code);
+    let message = 'Registration failed';
+    let status = 500;
+    const codeStr = String(code);
 
-    if (code === '23505') {
-      await serverHooks.doAction('user.create:error', { error: e });
-      return res.status(409).json(wpError('23505', 'A user with that email or username already exists.'));
+    if (codeStr === '23505') { 
+      message = 'Username or email already exists.';
+      status = 409; 
+    } else if (e instanceof Error && e.message?.startsWith("Invalid user object received")) {
+      message = e.message;
+      status = 500; 
+    } else {
+      message = e.message || 'An unknown error occurred during registration.';
+      status = e.status || 500;
     }
 
-    await serverHooks.doAction('user.create:error', { error: e });
-    res.status(500).json(wpError('500', 'Failed to register user'));
+    if (!res.headersSent) {
+      res.status(status).json(wpError(codeStr || String(status), message, status));
+    } else {
+      console.error('ERROR [auth]: Attempted to send error response after headers were already sent.');
+    }
   }
 });
 

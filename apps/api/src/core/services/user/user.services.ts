@@ -31,21 +31,27 @@ export async function createUser({
 
   const hashed = await hashPassword(user_pass);
 
-  const result = await db.insert(schema.wp_users).values({
-    user_login,
-    user_email,
-    user_pass: hashed,
-    display_name,
-    user_nicename: user_login.toLowerCase(),
-    user_registered: new Date().toISOString(),
-    user_url: '',
-    user_activation_key: '',
-    user_status: 0,
-  }).returning();
+  const result = await db.transaction(async (trx) => {
+    const userResult = await trx.insert(schema.wp_users).values({
+      user_login,
+      user_email,
+      user_pass: hashed,
+      display_name,
+      user_nicename: user_login.toLowerCase(),
+      user_registered: new Date().toISOString(),
+      user_url: '',
+      user_activation_key: '',
+      user_status: 0,
+    }).returning();
 
-  await createUserMetaDefaults(result[0].ID, {
-    nickname: display_name,
+    await createUserMetaDefaults(userResult[0].ID, {
+      nickname: display_name,
+    }, trx);
+
+    return userResult;
   });
+
+  console.log('user service:', result[0]);
 
   await serverHooks.doAction('user.create:after', { user: result[0] });
   return await serverHooks.applyFilters('user.create', result[0]);

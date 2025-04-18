@@ -1,6 +1,14 @@
 import { db, schema } from "../../db";
 import { eq, and } from 'drizzle-orm';
 import { serverHooks } from '../../../core/hooks/hookEngine.server';
+import type { NodePgDatabase, NodePgTransaction } from 'drizzle-orm/node-postgres';
+
+
+
+// Correctly define Db/Transaction types
+type DbClient = typeof db;
+type TransactionClient = Parameters<DbClient['transaction']>[0] extends (client: infer C) => any ? C : never;
+type DbOrTrx = DbClient | TransactionClient;
 
 /**
  * Create default user meta entries for a new user.
@@ -21,7 +29,7 @@ export async function createUserMetaDefaults(userId: number, overrides: {
   description?: string; 
   locale?: string; 
   role?: 'subscriber' | 'contributor' | 'author' | 'editor' | 'administrator'; 
-}) {
+}, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('userMeta.create:before', { userId, overrides });
   const role = overrides.role || 'subscriber';
 
@@ -56,7 +64,7 @@ export async function createUserMetaDefaults(userId: number, overrides: {
     },
   ];
 
-  await db.insert(schema.wp_usermeta).values(
+  await dbClient.insert(schema.wp_usermeta).values(
     metaValues.map(meta => ({
       user_id: userId,
       meta_key: meta.meta_key,
@@ -73,11 +81,11 @@ export async function createUserMetaDefaults(userId: number, overrides: {
  * @param {string} [metaKey] - Specific meta key to retrieve.
  * @returns {Promise<any>} The meta data for the user.
  */
-export async function getUserMeta(userId: number, metaKey?: string) {
+export async function getUserMeta(userId: number, metaKey?: string, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('userMeta.get:before', { userId, metaKey });
   let result;
   if (metaKey) {
-    result = await db.select().from(schema.wp_usermeta)
+    result = await dbClient.select().from(schema.wp_usermeta)
       .where(and(
         eq(schema.wp_usermeta.user_id, userId),
         eq(schema.wp_usermeta.meta_key, metaKey)
@@ -97,9 +105,9 @@ export async function getUserMeta(userId: number, metaKey?: string) {
  * @param {string} metaKey - The meta key to update or insert.
  * @param {any} metaValue - The value to set for the meta key.
  */
-export async function setUserMeta(userId: number, metaKey: string, metaValue: any) {
+export async function setUserMeta(userId: number, metaKey: string, metaValue: any, dbClient: DbOrTrx = db) {
   serverHooks.doAction('userMeta.set:before', { userId, metaKey, metaValue });
-  const updated = await db.update(schema.wp_usermeta)
+  const updated = await dbClient.update(schema.wp_usermeta)
     .set({ meta_value: metaValue })
     .where(and(
       eq(schema.wp_usermeta.user_id, userId),
@@ -118,9 +126,9 @@ export async function setUserMeta(userId: number, metaKey: string, metaValue: an
  * @param {string} metaKey - The meta key to delete.
  * @returns {Promise<any>} The result of the delete operation.
  */
-export async function deleteUserMeta(userId: number, metaKey: string) {
+export async function deleteUserMeta(userId: number, metaKey: string, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('userMeta.delete:before', { userId, metaKey });
-  const result = await db.delete(schema.wp_usermeta)
+  const result = await dbClient.delete(schema.wp_usermeta)
     .where(and(
       eq(schema.wp_usermeta.user_id, userId),
       eq(schema.wp_usermeta.meta_key, metaKey)

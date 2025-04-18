@@ -12,6 +12,14 @@ serverHooks.addFilter('user.create:after', (_unused, payload) => {
   if (payload?.user) {
     console.log('User registered:', { id: payload.user.ID, email: payload.user.user_email });
   }
+  return {...payload, haha: true};
+});
+
+serverHooks.addFilter('user.create', (payload) => {
+  if (payload?.user) {
+    console.log('User registered:', { id: payload.user.ID, email: payload.user.user_email });
+  }
+  return {...payload, haha: true};
 });
 
 serverHooks.addFilter('user.login:error', (_unused, payload) => {

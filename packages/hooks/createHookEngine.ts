@@ -234,12 +234,26 @@ export function createHookEngine(): HookAPI {
     const prios = priorities.filter(prio =>
       Object.keys(callbacks[prio] || {}).some(uid => uid.startsWith(hookName + ':'))
     );
-    if (prios.length === 0) return value;
+    if (prios.length === 0) {
+        console.log(`DEBUG [applyFilters]: No filters found for hook '${hookName}'. Returning original value:`, JSON.stringify(value));
+        return value; // Should return the user object here for 'user.create'
+    }
+
     let result: any = value;
     const numArgsTotal = args.length + 1;
     for (const prio of prios) {
       for (const [uid, {fn, acceptedArgs}] of Object.entries(callbacks[prio] || {})) {
-        if (!uid.startsWith(hookName + ':')) continue;
+        // --- BEGIN PROPOSED CHANGE ---
+        // OLD check: if (!uid.startsWith(hookName + ':')) continue;
+
+        // NEW check: Extract hook name from UID and compare for exact match
+        const uidParts = uid.split(':');
+        // Handle potential colons in hook names by taking all parts except the last two (priority, fnId)
+        const uidHookName = uidParts.slice(0, -2).join(':');
+        if (uidHookName !== hookName) continue; // Only process filters for the exact hookName
+        // --- END PROPOSED CHANGE ---
+
+        console.log(`DEBUG [applyFilters]: Calling filter for hook '${hookName}' (UID: ${uid}) with value:`, JSON.stringify(result));
         if (acceptedArgs === 0) {
           result = await fn();
         } else if (acceptedArgs >= numArgsTotal) {
@@ -247,8 +261,10 @@ export function createHookEngine(): HookAPI {
         } else {
           result = await fn(...[result, ...args].slice(0, acceptedArgs));
         }
+        console.log(`DEBUG [applyFilters]: Filter for hook '${hookName}' (UID: ${uid}) returned:`, JSON.stringify(result));
       }
     }
+    console.log(`DEBUG [applyFilters]: Finished applying filters for hook '${hookName}'. Final result:`, JSON.stringify(result));
     return result;
   }
 
