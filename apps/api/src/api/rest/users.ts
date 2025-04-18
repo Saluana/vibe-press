@@ -7,6 +7,39 @@ import {z} from 'zod';
 
 const router = Router();
 
+function getMd5Hash(email: string): string {
+  return new Bun.CryptoHasher('md5').update(email.trim().toLowerCase()).digest('hex');
+}
+
+// Map DB user to WP REST API user format
+function mapUserToWP(user: any): any {
+  const hash = user.user_email ? getMd5Hash(user.user_email) : '';
+  const baseUrl = "http://localhost:4000"; // Change to your site URL if needed
+  return {
+    id: user.ID || user.id,
+    name: user.display_name,
+    url: user.user_url,
+    description: user.description || "",
+    link: `${baseUrl}/author/${user.user_nicename || user.slug}/`,
+    slug: user.user_nicename || user.slug,
+    avatar_urls: {
+      24: `https://secure.gravatar.com/avatar/${hash}?s=24&d=mm&r=g`,
+      48: `https://secure.gravatar.com/avatar/${hash}?s=48&d=mm&r=g`,
+      96: `https://secure.gravatar.com/avatar/${hash}?s=96&d=mm&r=g`
+    },
+    meta: user.meta || [],
+    _links: {
+      self: [
+        { href: `${baseUrl}/wp-json/wp/v2/users/${user.ID || user.id}`, targetHints: { allow: ["GET"] } }
+      ],
+      collection: [
+        { href: `${baseUrl}/wp-json/wp/v2/users` }
+      ]
+    }
+  };
+}
+
+
 // Arktype schemas for validation
 const CreateUserValidation = z.object({
   username: z.string(),
@@ -107,8 +140,9 @@ router.get('/users', async (req: Request, res: Response) => {
   
     try {
       const users = await getUsers(queryParams);
-
-      return res.json(users); // optionally wrap this for WP shape
+      // Map users to WP REST API shape
+      const wpUsers = users.map(mapUserToWP);
+      return res.json(wpUsers);
     } catch (err: any) {
       await serverHooks.doAction('users.get:error', { error: err });
       return res.status(500).json(wpError('500', err.message || 'Unknown error', 500));
