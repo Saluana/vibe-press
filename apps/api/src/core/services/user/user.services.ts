@@ -6,6 +6,11 @@ import { createUserMetaDefaults } from './userMeta.services';
 import { serverHooks } from '../../../core/hooks/hookEngine.server';
 import { PgSelect } from 'drizzle-orm/pg-core';
 
+// Correctly define Db/Transaction types
+type DbClient = typeof db;
+type TransactionClient = Parameters<DbClient['transaction']>[0] extends (client: infer C) => any ? C : never;
+type DbOrTrx = DbClient | TransactionClient;
+
 /**
  * Creates a new user and inserts their information into the database.
  * 
@@ -26,12 +31,12 @@ export async function createUser({
   user_email: string;
   user_pass: string;
   display_name: string;
-}) {
+}, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('user.create:before', { user_login, user_email, display_name });
 
   const hashed = await hashPassword(user_pass);
 
-  const result = await db.transaction(async (trx) => {
+  const result = await dbClient.transaction(async (trx) => {
     const userResult = await trx.insert(schema.wp_users).values({
       user_login,
       user_email,
@@ -63,9 +68,9 @@ export async function createUser({
  * @param {string} identifier - The login username or email of the user.
  * @returns {Promise<Object|null>} The user record, or null if not found.
  */
-export async function getUserByLoginOrEmail(identifier: string) {
+export async function getUserByLoginOrEmail(identifier: string, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('user.get:before', { identifier });
-  const result = await db.select().from(schema.wp_users)
+  const result = await dbClient.select().from(schema.wp_users)
     .where(
       or(
         eq(schema.wp_users.user_login, identifier),
@@ -96,13 +101,13 @@ export async function updateUser(userId: number, updates: {
   display_name?: string;
   user_url?: string;
   user_status?: number;
-}) {
+}, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('user.update:before', { userId, updates });
   const data: any = { ...updates };
   if (updates.user_pass) {
     data.user_pass = await hashPassword(updates.user_pass);
   }
-  const result = await db.update(schema.wp_users)
+  const result = await dbClient.update(schema.wp_users)
     .set(data)
     .where(eq(schema.wp_users.ID, userId))
     .returning();
@@ -116,9 +121,9 @@ export async function updateUser(userId: number, updates: {
  * @param {number} userId - The ID of the user.
  * @returns {Promise<Object|null>} The deleted user record.
  */
-export async function deleteUser(userId: number) {
+export async function deleteUser(userId: number, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('user.delete:before', { userId });
-  const result = await db.delete(schema.wp_users)
+  const result = await dbClient.delete(schema.wp_users)
     .where(eq(schema.wp_users.ID, userId))
     .returning();
   await serverHooks.doAction('user.delete:after', { user: result[0] });
@@ -155,7 +160,7 @@ export type GetUsersParams = {
  * @param params - The parameters to filter, sort, and paginate users.
  * @returns A list of users matching the query.
  */
-export async function getUsers(params: GetUsersParams) {
+export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
   const {
     context = 'view',
     page = 1,
@@ -190,7 +195,7 @@ export async function getUsers(params: GetUsersParams) {
   }
   
   // Initialize query builder
-  let queryBuilder: any = db.select({
+  let queryBuilder: any = dbClient.select({
     id: schema.wp_users.ID,
     user_login: schema.wp_users.user_login,
     user_nicename: schema.wp_users.user_nicename,
