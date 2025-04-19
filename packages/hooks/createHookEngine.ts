@@ -109,8 +109,20 @@ function ensureKnownHook(hookName: string): asserts hookName is HookName {
 }
 
 /* ─────────────────────────────────────────────────────────── */
-/* 5 ▸ Engine factory                                           */
-
+/* 5 ▸ Engine factory                                           */
+/**
+ * Creates a new hook engine that implements the WordPress-style hooks API.
+ * 
+ * This factory function returns an object with methods for registering and 
+ * executing hooks (actions and filters). The hook engine manages priorities,
+ * maintains callback references, and provides both synchronous and asynchronous
+ * execution paths.
+ * 
+ * All hooks must be registered via defineHook() before they can be used.
+ * This ensures type safety and prevents typos in hook names.
+ * 
+ * @returns {HookAPI} A new hook engine instance with the complete hooks API
+ */
 export function createHookEngine(): HookAPI {
   /** callbacks[priority][uid] → {fn, acceptedArgs} */
   const callbacks: Record<number, Record<string, CallbackEntry>> = {};

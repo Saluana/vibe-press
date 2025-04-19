@@ -1,9 +1,9 @@
 // src/api/rest/auth.ts
 import { Router, Request, Response } from 'express';
-import { createUser } from '../../core/services/user/user.services';
-import { signJwt, authenticateUsernamePassword } from '../../core/services/auth.services';
-import { wpError } from '../../core/utils/wpError';
-import { serverHooks } from '../../core/hooks/hookEngine.server';
+import { createUser } from '@vp/core/services/user/user.services';
+import { signJwt, authenticateUsernamePassword } from '@vp/core/services/auth.services';
+import { wpError } from '@vp/core/utils/wpError';
+import { serverHooks } from '@vp/core/hooks/hookEngine.server';
 import {z} from 'zod';
 
 const router = Router();

@@ -1,8 +1,8 @@
-import { db, schema } from "../../db";
+import { db, schema } from "@vp/core/db";
 import { eq, and } from 'drizzle-orm';
-import { serverHooks } from '../../../core/hooks/hookEngine.server';
+import { serverHooks } from '@vp/core/hooks/hookEngine.server';
 import type { NodePgDatabase, NodePgTransaction } from 'drizzle-orm/node-postgres';
-import { getRoles } from '../../../core/roles/roles';
+import { getRoles } from '@vp/core/roles/roles';
 
 
 // Correctly define Db/Transaction types

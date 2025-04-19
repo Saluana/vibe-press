@@ -1,9 +1,9 @@
 // src/core/services/user.service.ts
-import { db, schema } from '../../db';
-import { hashPassword } from '../auth.services';
+import { db, schema } from '@vp/core/db';
+import { hashPassword } from '@vp/core/services/auth.services';
 import { sql, and, or, like, eq, inArray } from 'drizzle-orm';
 import { createUserMetaDefaults, setUserMeta, setUserRole } from './userMeta.services';
-import { serverHooks } from '../../../core/hooks/hookEngine.server';
+import { serverHooks } from '@vp/core/hooks/hookEngine.server';
 import { PgSelect } from 'drizzle-orm/pg-core';
 
 // Correctly define Db/Transaction types

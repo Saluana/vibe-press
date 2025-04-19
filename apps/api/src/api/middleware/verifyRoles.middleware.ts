@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyJwt, userCan } from '../../core/services/auth.services';
-import { wpError } from '../../core/utils/wpError';
+import { verifyJwt, userCan } from '@vp/core/services/auth.services';
+import { wpError } from '@vp/core/utils/wpError';
 
 export interface AuthRequest extends Request {
   user?: { id: number };

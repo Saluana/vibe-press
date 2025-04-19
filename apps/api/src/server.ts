@@ -1,10 +1,11 @@
 import dotenv from "dotenv";
 import express, { Request, Response } from "express";
 import pg from "pg";
-import AuthRouter from "./api/rest/auth";
-import UserRouter from "./api/rest/users";
-import './core/plugins/banned-names';
-import { requireCapabilities } from "./api/middleware/verifyRoles.middleware";
+import AuthRouter from "@vp/server/rest/auth";
+import UserRouter from "@vp/server/rest/users";
+import "@vp/core/plugins/banned-names";
+import { requireCapabilities } from "@vp/server/middleware/verifyRoles.middleware";
+
 const { Pool } = pg;
 
 // Load environment variables

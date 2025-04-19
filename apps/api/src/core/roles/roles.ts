@@ -1,7 +1,7 @@
 
-import { db, schema } from "../db";
+import { db, schema } from "@vp/core/db";
 import { eq } from "drizzle-orm";
-import { cache } from '../utils/cacheManager';
+import { cache } from '@vp/core/utils/cacheManager';
 
 export interface Role {
     name: string;

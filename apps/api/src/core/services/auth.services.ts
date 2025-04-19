@@ -1,11 +1,11 @@
 // src/core/services/auth.service.ts
 import jwt from 'jsonwebtoken';
-import { getUserByLoginOrEmail } from './user/user.services';
-import { serverHooks } from '../../core/hooks/hookEngine.server';
-import { getUserMeta } from './user/userMeta.services';
-import { getRoles } from '../roles/roles';
-import { db } from '../db';
-import { cache } from '../utils/cacheManager';
+import { getUserByLoginOrEmail } from '@vp/core/services/user/user.services';
+import { serverHooks } from '@vp/core/hooks/hookEngine.server';
+import { getUserMeta } from '@vp/core/services/user/userMeta.services';
+import { getRoles } from '@vp/core/roles/roles';
+import { db } from '@vp/core/db';
+import { cache } from '@vp/core/utils/cacheManager';
 
 // Correctly define Db/Transaction types
 type DbClient = typeof db;

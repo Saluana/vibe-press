@@ -10,7 +10,11 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".", // sets root
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@vp/packages/*": ["packages/*"],
+      "@vp/server/*": ["apps/api/src/api/*"],
+      "@vp/core/*": ["apps/api/src/core/*"],
+      "@vp/db/*": ["apps/api/src/core/db/*"]
     }
   }
 }
