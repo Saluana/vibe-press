@@ -146,12 +146,12 @@ router.get('/users', requireCapabilities(['read', 'list_users']), async (req: Re
       const wpUsers = users.map(mapUserToWP);
       return res.json(wpUsers);
     } catch (err: any) {
-      await serverHooks.doAction('users.get:error', { error: err });
+      await serverHooks.doAction('rest.users.get:action:error', { error: err });
       return res.status(500).json(wpError('500', err.message || 'Unknown error', 500));
     }
   } catch (err: any) {
     console.error('Error processing /users request:', err);
-    await serverHooks.doAction('users.get:error', { error: err });
+    await serverHooks.doAction('rest.users.get:action:error', { error: err });
     return res.status(500).json(wpError('500', err.message || 'Unknown error', 500));
   }
 });
@@ -202,12 +202,11 @@ router.put('/users/:id', requireCapabilities(['edit_users']), async (req: Reques
             return res.status(404).json(wpError('rest_user_invalid_id', 'Invalid user ID.', 404));
         }
 
-        const wpUser = mapUserToWP(updatedUser);
-        await serverHooks.doAction('user.update:success', { user: updatedUser });
+        const wpUser = mapUserToWP(updatedUser);;
         return res.json(wpUser);
     } catch (err: any) {
         console.error(`Error updating user ${userId}:`, err);
-        await serverHooks.doAction('user.update:error', { error: err, userId });
+        await serverHooks.doAction('rest.user.update:action:error', { error: err, userId });
         // Handle potential specific errors like duplicate username/email if needed
         if (err.code === '...') { // Example: Check for specific DB errors
             // return res.status(400).json(wpError('existing_user_login', 'Username already exists.', 400));

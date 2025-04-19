@@ -23,35 +23,35 @@ export async function comparePassword(password: string, hashed: string): Promise
 }
 
 export function signJwt(userId: number): string {
-  serverHooks.doAction('jwt.sign:before', { userId });
+  serverHooks.doAction('svc.jwt.sign:action:before', { userId });
   const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '14d' });
-  serverHooks.doAction('jwt.sign:after', { userId, token });
+  serverHooks.doAction('svc.jwt.sign:action:after', { userId, token });
   return token;
 }
 
 export async function authenticateUsernamePassword(identifier: string, password: string) {
-  serverHooks.doAction('user.login:before', { identifier });
+  serverHooks.doAction('svc.user.login:action:before', { identifier });
   const user = await getUserByLoginOrEmail(identifier);
 
   if (!user) {
-    serverHooks.doAction('user.login:error', { error: new Error('User not found') });
+    serverHooks.doAction('svc.user.login:action:error', { error: new Error('User not found') });
     throw new Error('User not found');
   }
   const valid = await comparePassword(password, user.user_pass);
 
   if (!valid) {
-    serverHooks.doAction('user.login:error', { error: new Error('Invalid password') });
+    serverHooks.doAction('svc.user.login:action:error', { error: new Error('Invalid password') });
     throw new Error('Invalid password');
   }
   const token = signJwt(user.ID);
-  serverHooks.doAction('user.login:after', { user, token });
+  serverHooks.doAction('svc.user.login:action:after', { user, token });
   return { user, token };
 }
 
 export function verifyJwt(token: string): { userId: number } {
-  serverHooks.doAction('jwt.verify:before', { token });
+  serverHooks.doAction('svc.jwt.verify:action:before', { token });
   const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
-  serverHooks.doAction('jwt.verify:after', { token, decoded });
+  serverHooks.doAction('svc.jwt.verify:action:after', { token, decoded });
   return decoded;
 }
 export interface CapabilityCheckArgs {
@@ -59,7 +59,7 @@ export interface CapabilityCheckArgs {
 }
 
 export async function userCan(userId: number, args: CapabilityCheckArgs, dbClient: DbOrTrx = db): Promise<boolean> {
-  await serverHooks.doAction('user.can:before', { userId, args });
+  await serverHooks.doAction('svc.user.can:action:before', { userId, args });
 
   const { capabilities } = args;
   const cacheKey = `user:${userId}:capabilities`;
@@ -96,7 +96,7 @@ export async function userCan(userId: number, args: CapabilityCheckArgs, dbClien
 
   const hasAllCaps = capabilities.every(cap => userCapabilities && userCapabilities[cap]); // Check userCapabilities exists
 
-  const filteredResult = await serverHooks.applyFilters('user.can', hasAllCaps, { userId, args, userCapabilities });
-  await serverHooks.doAction('user.can:after', { userId, args, result: filteredResult });
+  const filteredResult = await serverHooks.applyFilters('svc.user.can:filter:result', hasAllCaps, { userId, args, userCapabilities });
+  await serverHooks.doAction('svc.user.can:action:after', { userId, args, result: filteredResult });
   return filteredResult;
 }

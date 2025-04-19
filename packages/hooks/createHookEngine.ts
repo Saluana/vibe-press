@@ -16,44 +16,110 @@
 /* ─────────────────────────────────────────────────────────── */
 /* 1 ▸ Registry primitives                                       */
 
-// Shape stored for each hook.
-interface HookSpec<Args extends any[] = any[]> {
+// Represents the specification for a registered hook.
+// Args defines the expected arguments when *calling* the hook.
+// ReturnValue is relevant for filters, defining the type of the value they modify.
+export interface HookSpec<Args extends any[] = any[], ReturnValue = any> {
+  /** Type of hook: 'action' (side effects) or 'filter' (modifies value) */
+  kind: 'action' | 'filter';
   /** Human‑readable description (optional but recommended) */
   description?: string;
   /** Expected total argument count when *calling* the hook. */
   acceptedArgs: number;
 }
 
-// The central immutable registry (filled only through declareHooks / defineHook).
-export const hookRegistry: Record<string, HookSpec> = {};
+// Define all core hooks statically for compile-time type inference
+export const HOOKS = {
+  // 🧍 User Registration/Login
+  'svc.user.create:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before user is created (service layer)' },
+  'svc.user.create:action:after': { kind: 'action', acceptedArgs: 1, description: 'After user is created (service layer)' },
+  'svc.user.create:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter user result after creation (service layer)' },
 
-/**
- * Register a single hook.
- * Call this during application bootstrap – *never* from within a request.
- */
-export function defineHook<Args extends any[] = any[]>(
-  name: string,
-  acceptedArgs: number,
-  description?: string
-): void {
-  if (hookRegistry[name]) {
-    throw new Error(`[HookRegistry] Hook '${name}' already defined.`);
-  }
-  hookRegistry[name] = { acceptedArgs, description } as HookSpec<Args>;
+  // 🧍 User Get
+  'svc.user.get:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before fetching user by login/email (service layer)' },
+  'svc.user.get:action:after': { kind: 'action', acceptedArgs: 1, description: 'After fetching user by login/email (service layer)' },
+  'svc.user.get:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of getUserByLoginOrEmail (service layer)' },
+
+  // 🧍 Users Get (plural)
+  'svc.users.get:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before fetching users (service layer)' },
+  'svc.users.get:action:after': { kind: 'action', acceptedArgs: 1, description: 'After fetching users (service layer)' },
+  'svc.users.get:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of getUsers (service layer)' },
+
+  // 🧍 User Update
+  'svc.user.update:filter:input': { kind: 'filter', acceptedArgs: 2, description: 'Filter input payload before user update (service layer)' },
+  'svc.user.update:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before updating user (service layer)' },
+  'svc.user.update:action:after': { kind: 'action', acceptedArgs: 1, description: 'After updating user (service layer)' },
+  'svc.user.update:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter user result after update (service layer)' },
+
+  // 🧍 User Delete
+  'svc.user.delete:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before deleting user (service layer)' },
+  'svc.user.delete:action:after': { kind: 'action', acceptedArgs: 1, description: 'After deleting user (service layer)' },
+  'svc.user.delete:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter user result after delete (service layer)' },
+
+  // --- UserMeta Service Layer Hooks ---
+  'svc.userMeta.create:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before creating user meta defaults (service layer)' },
+  'svc.userMeta.create:action:after': { kind: 'action', acceptedArgs: 1, description: 'After creating user meta defaults (service layer)' },
+  'svc.userMeta.get:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before getUserMeta (service layer)' },
+  'svc.userMeta.get:action:after': { kind: 'action', acceptedArgs: 1, description: 'After getUserMeta (service layer)' },
+  'svc.userMeta.get:filter:result': { kind: 'filter', acceptedArgs: 3, description: 'Filter result of getUserMeta (service layer)' },
+  'svc.userMeta.getBatch:filter:result': { kind: 'filter', acceptedArgs: 3, description: 'Filter result of getUserMetaBatch (service layer)' },
+  'svc.userMeta.set:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before setUserMeta (service layer)' },
+  'svc.userMeta.set:filter:input': { kind: 'filter', acceptedArgs: 3, description: 'Filter input value before setUserMeta (service layer)' },
+  'svc.userMeta.set:action:after': { kind: 'action', acceptedArgs: 1, description: 'After setUserMeta (service layer)' },
+  'svc.userMeta.delete:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before deleteUserMeta (service layer)' },
+  'svc.userMeta.delete:action:after': { kind: 'action', acceptedArgs: 1, description: 'After deleteUserMeta (service layer)' },
+  'svc.userMeta.delete:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of deleteUserMeta (service layer)' },
+  'svc.userMeta.setRole:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before setUserRole (service layer)' },
+  'svc.userMeta.setRole:action:after': { kind: 'action', acceptedArgs: 1, description: 'After setUserRole (service layer)' },
+
+  // --- Legacy/compat hooks (used elsewhere or for public API) ---
+  'rest.user.update:action:error': { kind: 'action', acceptedArgs: 1, description: 'On user update failure' },
+  'rest.users.get:action:error': { kind: 'action', acceptedArgs: 1, description: 'On users get failure' },
+  'rest.user.login:action:error': { kind: 'action', acceptedArgs: 1, description: 'On user login failure' },
+  
+  'svc.user.can:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before checking user capabilities (service layer)' },
+  'svc.user.can:action:after': { kind: 'action', acceptedArgs: 1, description: 'After checking user capabilities (service layer)' },
+  'svc.user.can:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of user capability check (service layer)' },
+  'svc.user.login:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before user login (service layer)' },
+  'svc.user.login:action:after': { kind: 'action', acceptedArgs: 1, description: 'After user login (service layer)' },
+  'svc.user.login:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of user login (service layer)' },
+  'svc.user.login:action:error': { kind: 'action', acceptedArgs: 1, description: 'On user login failure' },
+  'svc.jwt.sign:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before signing JWT' },
+  'svc.jwt.sign:action:after': { kind: 'action', acceptedArgs: 2, description: 'After JWT is signed' },
+  'svc.jwt.verify:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before verifying JWT' },
+  'svc.jwt.verify:action:after': { kind: 'action', acceptedArgs: 2, description: 'After JWT is verified' },
+
+} as const; // Use 'as const' for precise type inference
+
+// Base type for hook specifications (used internally)
+export interface HookSpec<Args extends any[] = any[], ReturnValue = any> {
+  kind: 'action' | 'filter';
+  description?: string;
+  acceptedArgs: number;
 }
 
-/**
- * Convenience helper to register many hooks at once with literal inference.
- */
-export function declareHooks<const H extends Record<string, HookSpec>>(specs: H): void {
-  (Object.keys(specs) as (keyof H)[]).forEach(name => {
-    // @ts-ignore – we know the key is string
-    defineHook(name, specs[name].acceptedArgs, specs[name].description);
-  });
-}
+// Derive the registry type from the static HOOKS constant
+export type HookRegistry = typeof HOOKS;
 
-// After at least one hook is declared, TypeScript derives the union.
-export type HookName = keyof typeof hookRegistry;
+// Derive HookName, FilterHookName, ActionHookName from the inferred HookRegistry type
+export type HookName = keyof HookRegistry;
+
+export type FilterHookName = {
+  [K in keyof HookRegistry]: HookRegistry[K]['kind'] extends 'filter' ? K : never
+}[keyof HookRegistry];
+
+export type ActionHookName = {
+  [K in keyof HookRegistry]: HookRegistry[K]['kind'] extends 'action' ? K : never
+}[keyof HookRegistry];
+
+// Helper types for plugin developers
+export type AllHooks = HookName;
+export type AllActions = ActionHookName;
+export type AllFilters = FilterHookName;
+
+// Runtime registry - initialized as a copy of the static definitions
+// Used by the hook engine internals for lookups. Allow string index for dynamic hooks.
+const hookRegistry: Record<string, HookSpec> = { ...HOOKS };
 
 /* ─────────────────────────────────────────────────────────── */
 /* 2 ▸ Callback bookkeeping                                     */
@@ -70,23 +136,35 @@ interface CallbackEntry {
 
 export interface HookAPI {
   addFilter(
-    hookName: HookName,
+    hookName: FilterHookName,
     callback: Callback,
     priority?: number,
     acceptedArgs?: number
   ): void;
   removeFilter(
-    hookName: HookName,
+    hookName: FilterHookName,
     callback: Callback,
     priority?: number
   ): boolean;
-  hasFilter(hookName?: HookName, callback?: Callback): boolean | number;
+  hasFilter(hookName?: FilterHookName, callback?: Callback): boolean | number;
   hasFilters(): boolean;
-  removeAllFilters(priority?: number): void;
-  applyFiltersSync<T>(hookName: HookName, value: T, ...args: any[]): T;
-  applyFilters<T>(hookName: HookName, value: T, ...args: any[]): Promise<T>;
-  doActionSync(hookName: HookName, ...args: any[]): void;
-  doAction(hookName: HookName, ...args: any[]): Promise<void>;
+  removeAllCallbacks(priority?: number): void;
+  applyFiltersSync<T>(hookName: FilterHookName, value: T, ...args: any[]): T;
+  applyFilters<T>(hookName: FilterHookName, value: T, ...args: any[]): Promise<T>;
+  addAction(
+    hookName: ActionHookName,
+    callback: Callback,
+    priority?: number,
+    acceptedArgs?: number
+  ): void;
+  removeAction(
+    hookName: ActionHookName,
+    callback: Callback,
+    priority?: number
+  ): boolean;
+  hasAction(hookName?: ActionHookName, callback?: Callback): boolean | number;
+  doAction(hookName: ActionHookName, ...args: any[]): Promise<void>;
+  doActionSync(hookName: ActionHookName, ...args: any[]): void;
   doAllHook(args: any[]): void;
   currentPriority(): number | false;
 }
@@ -104,7 +182,7 @@ function buildUniqueId(hook: string, cb: Callback, prio: number): string {
 
 function ensureKnownHook(hookName: string): asserts hookName is HookName {
   if (!hookRegistry[hookName]) {
-    throw new Error(`[Hooks] Unknown hook '${hookName}'. Did you call defineHook()?`);
+    throw new Error(`[HookRegistry] Hook '${hookName}' already defined.`);
   }
 }
 
@@ -175,7 +253,7 @@ export function createHookEngine(): HookAPI {
   /* ───── public API implementation ───── */
 
   function addFilter(
-    hookName: HookName,
+    hookName: FilterHookName,
     callback: Callback,
     priority = 10,
     acceptedArgs = callback.length
@@ -193,7 +271,7 @@ export function createHookEngine(): HookAPI {
   }
 
   function removeFilter(
-    hookName: HookName,
+    hookName: FilterHookName,
     callback: Callback,
     priority = 10
   ): boolean {
@@ -212,7 +290,7 @@ export function createHookEngine(): HookAPI {
 
   const hasFilters = (): boolean => priorities.length > 0;
 
-  function hasFilter(hookName: HookName = '' as HookName, callback?: Callback): boolean | number {
+  function hasFilter(hookName: FilterHookName = '' as FilterHookName, callback?: Callback): boolean | number {
     ensureKnownHook(hookName);
     if (!callback) return hasFilters();
     const partial = buildUniqueId(hookName, callback, 0).split(':').slice(-1)[0];
@@ -224,19 +302,22 @@ export function createHookEngine(): HookAPI {
     return false;
   }
 
-  function removeAllFilters(priority?: number): void {
+  function removeAllCallbacks(priority?: number): void {
     if (priority === undefined) {
-      Object.keys(callbacks).forEach(k => delete callbacks[+k]);
-      priorities = [];
-    } else if (callbacks[priority]) {
-      delete callbacks[priority];
-      updatePriorities();
+      // Iterate and delete each priority key instead of reassigning the const object
+      Object.keys(callbacks).forEach(key => {
+        delete callbacks[Number(key)];
+      });
+      priorities = []; // Resetting the 'let' array is fine
+    } else if (callbacks.hasOwnProperty(priority)) { // Check callbacks existence
+      delete callbacks[priority]; // Modify const object property is fine
+      updatePriorities(); // Recalculate priorities array
     }
     if (nestingLevel > 0) resortActiveIterations();
   }
 
   // sync filter
-  function applyFiltersSync<T>(hookName: HookName, value: T, ...args: any[]): T {
+  function applyFiltersSync<T>(hookName: FilterHookName, value: T, ...args: any[]): T {
     ensureKnownHook(hookName);
     const prios = priorities.filter(prio =>
       Object.keys(callbacks[prio] || {}).some(uid => uid.startsWith(hookName + ':'))
@@ -266,7 +347,7 @@ export function createHookEngine(): HookAPI {
   }
 
   // async filter
-  async function applyFilters<T>(hookName: HookName, value: T, ...args: any[]): Promise<T> {
+  async function applyFilters<T>(hookName: FilterHookName, value: T, ...args: any[]): Promise<T> {
     ensureKnownHook(hookName);
     const prios = priorities.filter(prio =>
       Object.keys(callbacks[prio] || {}).some(uid => uid.startsWith(hookName + ':'))
@@ -286,15 +367,106 @@ export function createHookEngine(): HookAPI {
     return result;
   }
 
-  function doActionSync(hookName: HookName, ...args: any[]): void {
+  function addAction(
+    hookName: ActionHookName,
+    callback: Callback,
+    priority = 10,
+    acceptedArgs = callback.length
+  ): void {
+    ensureKnownHook(hookName);
+
+    const uid = buildUniqueId(hookName, callback, priority);
+    const priorityExisted = callbacks.hasOwnProperty(priority);
+
+    if (!priorityExisted) callbacks[priority] = {};
+    callbacks[priority][uid] = { fn: callback, acceptedArgs };
+    updatePriorities();
+
+    if (nestingLevel > 0) resortActiveIterations(priority, priorityExisted);
+  }
+
+  function removeAction(
+    hookName: ActionHookName,
+    callback: Callback,
+    priority = 10
+  ): boolean {
+    ensureKnownHook(hookName);
+    const uid = buildUniqueId(hookName, callback, priority);
+    const exists = !!(callbacks[priority] && callbacks[priority][uid]);
+    if (!exists) return false;
+    delete callbacks[priority][uid];
+    if (Object.keys(callbacks[priority]).length === 0) {
+      delete callbacks[priority];
+      updatePriorities();
+      if (nestingLevel > 0) resortActiveIterations();
+    }
+    return true;
+  }
+
+  function hasAction(hookName: ActionHookName = '' as ActionHookName, callback?: Callback): boolean | number {
+    ensureKnownHook(hookName);
+    if (!callback) return priorities.length > 0;
+    const partial = buildUniqueId(hookName, callback, 0).split(':').slice(-1)[0];
+    for (const [prio, group] of Object.entries(callbacks)) {
+      if (Object.keys(group).some(key => key.endsWith(partial))) {
+        return +prio;
+      }
+    }
+    return false;
+  }
+
+  // --- Action Specific Helpers ---
+
+  // Internal helper to run action callbacks without modifying a value
+  async function runActionCallbacks(hookName: ActionHookName, ...args: any[]): Promise<void> {
+    ensureKnownHook(hookName);
+    // Find priorities that contain callbacks for the specific action hook
+    const prios = priorities.filter(prio =>
+      Object.keys(callbacks[prio] || {}).some(uid => uid.startsWith(hookName + ':'))
+    );
+
+    if (!prios.length) return;
+
+    const level = nestingLevel++;
+    iterations[level] = [...prios];
+
+    try {
+      for (const currentPriority of iterations[level]) {
+        if (callbacks[currentPriority]) {
+          // Filter UIDs for the specific action hook at the current priority
+          const hookCallbacks = Object.entries(callbacks[currentPriority])
+            .filter(([uid]) => uid.startsWith(hookName + ':'))
+            .map(([, cbData]) => cbData);
+
+          for (const { fn, acceptedArgs } of hookCallbacks) {
+            await fn(...args.slice(0, acceptedArgs)); // Call with original args
+          }
+        }
+      }
+    } finally {
+      delete iterations[level];
+      nestingLevel--;
+    }
+  }
+
+  async function doAction(hookName: ActionHookName, ...args: any[]): Promise<void> {
     doingAction = true;
-    applyFiltersSync<void>(hookName, undefined as any, ...args);
+    // Use the dedicated action runner
+    await runActionCallbacks(hookName, ...args);
+    // Reset doingAction flag only at the top level
     if (nestingLevel === 0) doingAction = false;
   }
 
-  const doAction = async (hookName: HookName, ...args: any[]): Promise<void> => {
-    await applyFilters<void>(hookName, undefined as any, ...args);
-  };
+  function doActionSync(hookName: ActionHookName, ...args: any[]): void {
+    doingAction = true;
+    // Ideally, call a synchronous version of runActionCallbacks if implemented
+    // For now, logging a warning or throwing if async callbacks are added to sync actions might be needed.
+    // This simplified version just runs the async one without await - potential issues if callbacks aren't truly sync!
+    runActionCallbacks(hookName, ...args).catch(err => {
+      console.error(`Error in sync action hook '${hookName}':`, err); // Basic error handling
+    });
+    if (nestingLevel === 0) doingAction = false;
+  }
 
   function doAllHook(args: any[]): void {
     const level = nestingLevel++;
@@ -320,9 +492,12 @@ export function createHookEngine(): HookAPI {
     removeFilter,
     hasFilter,
     hasFilters,
-    removeAllFilters,
+    removeAllCallbacks,
     applyFilters,
     applyFiltersSync,
+    addAction,
+    removeAction,
+    hasAction,
     doAction,
     doActionSync,
     doAllHook,
@@ -330,51 +505,32 @@ export function createHookEngine(): HookAPI {
   };
 }
 
-// Register hooks (declarative)
-declareHooks({
-  // 🧍 User Registration/Login
-  'user.create': { acceptedArgs: 1, description: 'Before user is created in DB' },
-  'user.create:before': { acceptedArgs: 1, description: 'Before user is created in DB' },
-  'user.create:after': { acceptedArgs: 1, description: 'After user is created and token is issued' },
-  'user.create:error': { acceptedArgs: 1, description: 'On user creation failure' },
-  'user.login:before': { acceptedArgs: 1, description: 'Before login attempt' },
-  'user.login:after': { acceptedArgs: 2, description: 'After successful login' },
-  'user.login:error': { acceptedArgs: 1, description: 'On login failure' },
-  'jwt.sign:before': { acceptedArgs: 1, description: 'Before signing JWT' },
-  'jwt.sign:after': { acceptedArgs: 2, description: 'After JWT is signed' },
-  'jwt.verify:before': { acceptedArgs: 1, description: 'Before verifying JWT' },
-  'jwt.verify:after': { acceptedArgs: 2, description: 'After JWT is verified' },
+/**
+ * Register a single hook dynamically (if needed, core hooks are static now).
+ * 
+ * @param name Hook name
+ * @param kind Type of hook: 'action' (side effects) or 'filter' (modifies value)
+ * @param acceptedArgs Expected total argument count when *calling* the hook
+ * @param description Human-readable description (optional but recommended)
+ */
+export function defineHook<Args extends any[] = any[], ReturnValue = any>(
+  name: string,
+  kind: 'action' | 'filter',
+  acceptedArgs: number,
+  description?: string
+): void {
+  if (hookRegistry[name]) {
+    throw new Error(`[HookRegistry] Hook '${name}' already defined.`);
+  }
+  hookRegistry[name] = { kind, acceptedArgs, description } as HookSpec<Args, ReturnValue>;
+}
 
-  // 🧍 User Meta
-  'user.get': { acceptedArgs: 1, description: 'Before user data is returned' },
-  'user.get:before': { acceptedArgs: 1, description: 'Before user data is returned' },
-  'user.get:after': { acceptedArgs: 1, description: 'After user data is returned' },
-  'user.get:error': { acceptedArgs: 1, description: 'On user data fetch failure' },
-  'users.get': { acceptedArgs: 1, description: 'Before users data is returned' },
-  'users.get:before': { acceptedArgs: 1, description: 'Before users data is returned' },
-  'users.get:after': { acceptedArgs: 1, description: 'After users data is returned' },
-  'users.get:error': { acceptedArgs: 1, description: 'On users data fetch failure' },
-  'user.update': { acceptedArgs: 1, description: 'Before updating user data' },
-  'user.update:before': { acceptedArgs: 1, description: 'Before updating user data' },
-  'user.update:after': { acceptedArgs: 1, description: 'After user data is updated' },
-  'user.update:error': { acceptedArgs: 1, description: 'On user data update failure' },
-  'user.update:success': { acceptedArgs: 1, description: 'After user data is successfully updated' },
-  'user.delete:before': { acceptedArgs: 1, description: 'Before deleting user data' },
-  'user.delete:after': { acceptedArgs: 1, description: 'After user data is deleted' },
-  'user.delete:error': { acceptedArgs: 1, description: 'On user data delete failure' },
-  'user.can:before': { acceptedArgs: 1, description: 'Before checking user capabilities' },
-  'user.can:after': { acceptedArgs: 1, description: 'After checking user capabilities' },
-  'user.can': { acceptedArgs: 1, description: 'On user capability check failure' },
-  'userMeta.create:before': { acceptedArgs: 1, description: 'Before user meta is created' },
-  'userMeta.create:after': { acceptedArgs: 1, description: 'After user meta is created' },
-  'userMeta.get': { acceptedArgs: 1, description: 'Before user meta is fetched' },
-  'userMeta.get:before': { acceptedArgs: 1, description: 'Before user meta is fetched' },
-  'userMeta.get:after': { acceptedArgs: 1, description: 'After user meta is fetched' },
-  'userMeta.set:before': { acceptedArgs: 1, description: 'Before user meta is set' },
-  'userMeta.set:after': { acceptedArgs: 1, description: 'After user meta is set' },
-  'userMeta.delete:before': { acceptedArgs: 1, description: 'Before user meta is deleted' },
-  'userMeta.delete:after': { acceptedArgs: 1, description: 'After user meta is deleted' },
-  'userMeta.setRole:before': { acceptedArgs: 1, description: 'Before user role is set' },
-  'userMeta.setRole:after': { acceptedArgs: 1, description: 'After user role is set' },
-  'userMeta.setRole:error': { acceptedArgs: 1, description: 'On user role set failure' },
-});
+/**
+ * Convenience helper to register many hooks dynamically (if needed).
+ */
+export function declareHooks<const H extends Record<string, HookSpec>>(specs: H): void {
+  (Object.keys(specs) as (keyof H)[]).forEach(name => {
+    // @ts-ignore – we know the key is string
+    defineHook(name, specs[name].kind, specs[name].acceptedArgs, specs[name].description);
+  });
+}

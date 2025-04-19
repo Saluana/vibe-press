@@ -32,7 +32,7 @@ export async function createUser({
   user_pass: string;
   display_name: string;
 }, dbClient: DbOrTrx = db) {
-  await serverHooks.doAction('user.create:before', { user_login, user_email, display_name });
+  await serverHooks.doAction('svc.user.create:action:before', { user_login, user_email, display_name });
 
   const hashed = await hashPassword(user_pass);
 
@@ -58,8 +58,8 @@ export async function createUser({
 
   console.log('user service:', result[0]);
 
-  await serverHooks.doAction('user.create:after', { user: result[0] });
-  return await serverHooks.applyFilters('user.create', result[0]);
+  await serverHooks.doAction('svc.user.create:action:after', { user: result[0] });
+  return await serverHooks.applyFilters('svc.user.create:filter:result', result[0]);
 }
 
 /**
@@ -69,7 +69,7 @@ export async function createUser({
  * @returns {Promise<Object|null>} The user record, or null if not found.
  */
 export async function getUserByLoginOrEmail(identifier: string, dbClient: DbOrTrx = db) {
-  await serverHooks.doAction('user.get:before', { identifier });
+  await serverHooks.doAction('svc.user.get:action:before', { identifier });
   const result = await dbClient.select().from(schema.wp_users)
     .where(
       or(
@@ -77,8 +77,8 @@ export async function getUserByLoginOrEmail(identifier: string, dbClient: DbOrTr
         eq(schema.wp_users.user_email, identifier)
       )
     );
-  await serverHooks.doAction('user.get:after', { user: result[0] });
-  return await serverHooks.applyFilters('user.get', result[0] || null);
+  await serverHooks.doAction('svc.user.get:action:after', { user: result[0] });
+  return await serverHooks.applyFilters('svc.user.get:filter:result', result[0] || null);
 }
 
 /**
@@ -91,9 +91,9 @@ export async function getUserByLoginOrEmail(identifier: string, dbClient: DbOrTr
  */
 export async function updateUser(userId: number, updates: Record<string, any>, dbClient: DbOrTrx = db) {
   // Apply filter to allow validation/mutation of updates before processing
-  updates = await serverHooks.applyFilters('user.update:before', updates, userId);
+  updates = await serverHooks.applyFilters('svc.user.update:filter:input', updates, userId);
   
-  await serverHooks.doAction('user.update:before', { userId, updates });
+  await serverHooks.doAction('svc.user.update:action:before', { userId, updates });
 
   // Separate standard fields, roles, and meta
   const {
@@ -183,8 +183,8 @@ export async function updateUser(userId: number, updates: Record<string, any>, d
 
   const finalUser = updatedUserResult[0] || null; // Should always have a user if transaction succeeded
 
-  await serverHooks.doAction('user.update:after', { user: finalUser });
-  return await serverHooks.applyFilters('user.update', finalUser);
+  await serverHooks.doAction('svc.user.update:action:after', { user: finalUser });
+  return await serverHooks.applyFilters('svc.user.update:filter:result', finalUser);
 }
 
 /**
@@ -194,12 +194,12 @@ export async function updateUser(userId: number, updates: Record<string, any>, d
  * @returns {Promise<Object|null>} The deleted user record.
  */
 export async function deleteUser(userId: number, dbClient: DbOrTrx = db) {
-  await serverHooks.doAction('user.delete:before', { userId });
+  await serverHooks.doAction('svc.user.delete:action:before', { userId });
   const result = await dbClient.delete(schema.wp_users)
     .where(eq(schema.wp_users.ID, userId))
     .returning();
-  await serverHooks.doAction('user.delete:after', { user: result[0] });
-  return await serverHooks.applyFilters('user.delete', result[0] || null);
+  await serverHooks.doAction('svc.user.delete:action:after', { user: result[0] });
+  return await serverHooks.applyFilters('svc.user.delete:filter:result', result[0] || null);
 }
 
 export type GetUsersParams = {
@@ -250,7 +250,7 @@ export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
     hasPublishedPosts
   } = params;
 
-  await serverHooks.doAction('users.get:before', { params });
+  await serverHooks.doAction('svc.users.get:action:before', { params });
   // Start building the query
   let conditions = [];
   if (search) {
@@ -377,6 +377,6 @@ export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
 
 
   const users = await query;
-  await serverHooks.doAction('users.get:after', { users });
-  return await serverHooks.applyFilters('users.get', users);
+  await serverHooks.doAction('svc.users.get:action:after', { users });
+  return await serverHooks.applyFilters('svc.users.get:filter:result', users);
 }

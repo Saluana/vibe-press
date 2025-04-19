@@ -30,7 +30,7 @@ export async function createUserMetaDefaults(userId: number, overrides: {
   locale?: string; 
   role?: 'subscriber' | 'contributor' | 'author' | 'editor' | 'administrator'; 
 }, dbClient: DbOrTrx = db) {
-  await serverHooks.doAction('userMeta.create:before', { userId, overrides });
+  await serverHooks.doAction('svc.userMeta.create:action:before', { userId, overrides });
   const role = overrides.role || 'subscriber';
 
   const metaValues = [
@@ -71,7 +71,7 @@ export async function createUserMetaDefaults(userId: number, overrides: {
       meta_value: meta.meta_value,
     }))
   );
-  await serverHooks.doAction('userMeta.create:after', { userId, overrides });
+  await serverHooks.doAction('svc.userMeta.create:action:after', { userId, overrides });
 }
 
 /**
@@ -83,7 +83,7 @@ export async function createUserMetaDefaults(userId: number, overrides: {
  * @returns {Promise<any|null>} The meta value or null if not found.
  */
 export async function getUserMeta(userId: number, key: string, dbClient: DbOrTrx = db): Promise<any | null> {
-  await serverHooks.doAction('userMeta.get:before', { userId, key });
+  await serverHooks.doAction('svc.userMeta.get:action:before', { userId, key });
 
   const result = await dbClient.select().from(schema.wp_usermeta)
     .where(and(
@@ -93,11 +93,11 @@ export async function getUserMeta(userId: number, key: string, dbClient: DbOrTrx
 
   const metaValue = result.length > 0 ? result[0].meta_value : null;
 
-  await serverHooks.doAction('userMeta.get:after', { userId, key, result: metaValue });
-  // Apply filter if needed - allowing modification of the single value
-  // const filteredValue = await serverHooks.applyFilters('userMeta.get:after', metaValue, userId, key);
-  // return filteredValue;
-  return metaValue;
+  await serverHooks.doAction('svc.userMeta.get:action:after', { userId, key, result: metaValue });
+
+  const filteredValue = await serverHooks.applyFilters('svc.userMeta.get:filter:result', metaValue, userId, key);
+  return filteredValue;
+
 }
 
 /**
@@ -134,10 +134,8 @@ export async function getUserMetaBatch(userId: number, keys: string[], dbClient:
     }
   }
 
-  // Apply filter if needed (consider if necessary for batch get)
-  // metaMap = await serverHooks.applyFilters('userMeta.getBatch:after', metaMap, userId, keys);
-
-  return metaMap;
+  const filteredMetaMap = await serverHooks.applyFilters('svc.userMeta.getBatch:filter:result', metaMap, userId, keys);
+  return filteredMetaMap;
 }
 
 /**
@@ -148,7 +146,10 @@ export async function getUserMetaBatch(userId: number, keys: string[], dbClient:
  * @param {any} metaValue - The value to set for the meta key.
  */
 export async function setUserMeta(userId: number, metaKey: string, metaValue: any, dbClient: DbOrTrx = db) {
-  serverHooks.doAction('userMeta.set:before', { userId, metaKey, metaValue });
+  await serverHooks.doAction('svc.userMeta.set:action:before', { userId, metaKey, metaValue });
+  // add filter 
+  metaValue = await serverHooks.applyFilters('svc.userMeta.set:filter:input', metaValue, userId, metaKey);
+  
   const updated = await dbClient.update(schema.wp_usermeta)
     .set({ meta_value: metaValue })
     .where(and(
@@ -158,7 +159,7 @@ export async function setUserMeta(userId: number, metaKey: string, metaValue: an
   if (updated.rowCount === 0) {
     await db.insert(schema.wp_usermeta).values({ user_id: userId, meta_key: metaKey, meta_value: metaValue });
   }
-  await serverHooks.doAction('userMeta.set:after', { userId, metaKey, metaValue });
+  await serverHooks.doAction('svc.userMeta.set:action:after', { userId, metaKey, metaValue });
 }
 
 /**
@@ -169,23 +170,23 @@ export async function setUserMeta(userId: number, metaKey: string, metaValue: an
  * @returns {Promise<any>} The result of the delete operation.
  */
 export async function deleteUserMeta(userId: number, metaKey: string, dbClient: DbOrTrx = db) {
-  await serverHooks.doAction('userMeta.delete:before', { userId, metaKey });
+  await serverHooks.doAction('svc.userMeta.delete:action:before', { userId, metaKey });
   const result = await dbClient.delete(schema.wp_usermeta)
     .where(and(
       eq(schema.wp_usermeta.user_id, userId),
       eq(schema.wp_usermeta.meta_key, metaKey)
     ));
-  await serverHooks.doAction('userMeta.delete:after', { userId, metaKey, result });
-  return await serverHooks.applyFilters('userMeta.delete', result);
+  await serverHooks.doAction('svc.userMeta.delete:action:after', { userId, metaKey, result });
+  return await serverHooks.applyFilters('svc.userMeta.delete:filter:result', result);
 }
 
 export async function setUserRole(userId: number, role: string, dbClient: DbOrTrx = db) {
-  await serverHooks.doAction('userMeta.setRole:before', { userId, role });
+  await serverHooks.doAction('svc.userMeta.setRole:action:before', { userId, role });
   const roles = await getRoles(dbClient);
   if (!roles[role]) throw new Error(`Role ${role} does not exist`);
 
   await setUserMeta(userId, 'wp_capabilities', { [role]: true }, dbClient);
-  await serverHooks.doAction('userMeta.setRole:after', { userId, role });
+  await serverHooks.doAction('svc.userMeta.setRole:action:after', { userId, role });
 }
 
 export async function getUserRole(userId: number, dbClient: DbOrTrx = db): Promise<string | null> {

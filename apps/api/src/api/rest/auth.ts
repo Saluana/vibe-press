@@ -115,7 +115,7 @@ router.post('/login', async (req: Request, res: Response) => {
       },
     });
   } catch (e: any) {
-    await serverHooks.doAction('user.login:error', { error: e });
+    await serverHooks.doAction('rest.user.login:action:error', { error: e });
     res.status(500).json(wpError('500', 'Failed to login'));
   }
 });

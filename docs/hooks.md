@@ -54,6 +54,19 @@ serverHooks.doAction('user.register:before', { username: 'john' });
 
 ## 📚 Pre‑Registered Core Hooks
 
+Segment	Examples	Purpose & rules
+layer	rest, svc	Where the hook lives
+• rest = public HTTP / GraphQL layer
+• svc  = business‑logic / DB layer
+subject	user, post, userMeta …	The resource being acted on (lowerCamelCase)
+stage	create, update, get, query, delete, auth …	Verb describing the high‑level operation
+phase (optional)	Filters: input, transform, result
+Actions: before, after, error, event
+
+Type	Format	Example
+filter	subject.transform:stage	user.update:input, user.create:payload
+action	subject.event[:stage]	user.update:after, userMeta.set:before
+
 These are the hook points already wired into AstroPress core. Plugins and themes can safely use these:
 
 ### 🧍 User Registration/Login
