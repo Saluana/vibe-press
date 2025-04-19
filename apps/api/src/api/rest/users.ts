@@ -3,6 +3,7 @@ import { serverHooks } from "@vp/core/hooks/hookEngine.server";
 import { getUsers, updateUser } from "@vp/core/services/user/user.services";
 import {setUserMeta, setUserRole} from "@vp/core/services/user/userMeta.services";
 import { Router, Request, Response } from "express";
+import { requireCapabilities } from "../middleware/verifyRoles.middleware";
 
 import {z} from 'zod';
 
@@ -93,7 +94,7 @@ const formatUserResponse = async (user: any) => {
 };
 
 // @ts-expect-error
-router.get('/users', async (req: Request, res: Response) => {
+router.get('/users', requireCapabilities(['read', 'list_users']), async (req: Request, res: Response) => {
   try {
     const GetUsersValidation = z.object({
       context: z.enum(['view', 'embed', 'edit']).optional(),
@@ -157,7 +158,7 @@ router.get('/users', async (req: Request, res: Response) => {
   
 // Update a specific user
 // @ts-expect-error - Router typing issue, similar to GET route
-router.post('/users/:id', async (req: Request, res: Response) => {
+router.put('/users/:id', requireCapabilities(['edit_users']), async (req: Request, res: Response) => {
     const userId = parseInt(req.params.id, 10);
     if (isNaN(userId)) {
         return res.status(400).json(wpError('invalid_user_id', 'Invalid user ID.', 400));

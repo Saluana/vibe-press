@@ -66,23 +66,35 @@ export async function userCan(userId: number, args: CapabilityCheckArgs, dbClien
   let userCapabilities: Record<string, boolean> | null = await cache.get(cacheKey);
 
   if (!userCapabilities) {
-    const meta = await getUserMeta(userId, 'wp_capabilities', dbClient);
-    if (meta.length === 0) return false;
+    // getUserMeta returns the meta_value directly, or null
+    const userRolesMetaValue = await getUserMeta(userId, 'wp_capabilities', dbClient);
+    console.log(`[userCan ${userId}] getUserMeta result for 'wp_capabilities':`, userRolesMetaValue);
 
-    const userRoles = meta[0].meta_value as Record<string, boolean>;
-    const allRoles = await getRoles(dbClient);
-    userCapabilities = Object.keys(userRoles).reduce((caps, role) => {
-      if (allRoles[role]) return { ...caps, ...allRoles[role].capabilities };
-      return caps;
-    }, {} as Record<string, boolean>);
+    // Check if the returned value is a non-null object
+    if (userRolesMetaValue && typeof userRolesMetaValue === 'object') {
+      const userRoles = userRolesMetaValue as Record<string, boolean>; // Safe cast
+      const allRoles = await getRoles(dbClient);
+      userCapabilities = Object.keys(userRoles).reduce((caps, role) => {
+        // Check if the role is explicitly set to true in the meta and exists in allRoles
+        if (userRoles[role] === true && allRoles[role]) {
+          return { ...caps, ...allRoles[role].capabilities };
+        }
+        return caps;
+      }, {} as Record<string, boolean>);
+    } else {
+      // If no valid meta_value object found (returned null or not an object)
+      console.warn(`[userCan ${userId}] No valid 'wp_capabilities' meta object found. User might lack roles or meta is corrupt.`);
+      userCapabilities = {}; // Initialize as empty
+    }
 
-    await cache.set(cacheKey, userCapabilities, 3600 * 1000); // Cache for 1 hour
+    await cache.set(cacheKey, userCapabilities, 3600 * 1000); // Cache the determined capabilities
   }
 
-  console.log('userCapabilities', userCapabilities);
-  console.log('capabilities', capabilities);
+  // Now userCapabilities should be correctly populated based on the roles object
+  console.log(`[userCan ${userId}] Determined userCapabilities:`, userCapabilities);
+  console.log(`[userCan ${userId}] Required capabilities:`, capabilities);
 
-  const hasAllCaps = capabilities.every(cap => userCapabilities[cap]);
+  const hasAllCaps = capabilities.every(cap => userCapabilities && userCapabilities[cap]); // Check userCapabilities exists
 
   const filteredResult = await serverHooks.applyFilters('user.can', hasAllCaps, { userId, args, userCapabilities });
   await serverHooks.doAction('user.can:after', { userId, args, result: filteredResult });

@@ -1,4 +1,3 @@
-
 import { db, schema } from "@vp/core/db";
 import { eq } from "drizzle-orm";
 import { cache } from '@vp/core/utils/cacheManager';
@@ -109,4 +108,32 @@ export async function getRoles(dbClient: DbOrTrx = db): Promise<Roles> {
   const roleData = roles[0] ? JSON.parse(roles[0].option_value) : defaultRoles;
   await cache.set('wp_user_roles', roleData, 3600 * 1000);
   return roleData;
+}
+
+/**
+ * Gets an array of capabilities associated with a specific role name,
+ * using the currently active roles (from DB/cache or defaults).
+ *
+ * @param roleName The name of the role (e.g., 'subscriber', 'editor').
+ * @param dbClient Optional database client or transaction.
+ * @returns A promise that resolves to an array of strings representing the
+ *          capabilities for the role, or an empty array if the role is not found
+ *          or has no capabilities.
+ */
+export async function getUserCapabilities(roleName: string, dbClient: DbOrTrx = db): Promise<string[]> {
+  const activeRoles = await getRoles(dbClient); // Use the function that gets current roles
+  const roleDefinition = activeRoles[roleName];
+
+  if (!roleDefinition || !roleDefinition.capabilities) {
+    // Role not found in active roles or has no capabilities defined
+    console.warn(`Role '${roleName}' not found or has no capabilities defined.`);
+    return [];
+  }
+
+  // Filter the keys of the capabilities object to include only those set to true
+  const capabilities = Object.keys(roleDefinition.capabilities).filter(
+    (capability) => roleDefinition.capabilities[capability as keyof typeof roleDefinition.capabilities] === true
+  );
+
+  return capabilities;
 }
