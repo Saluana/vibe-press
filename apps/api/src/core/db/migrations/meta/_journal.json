@@ -22,6 +22,13 @@
       "when": 1744995494760,
       "tag": "0002_good_madame_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1745082341566,
+      "tag": "0003_skinny_zarda",
+      "breakpoints": true
     }
   ]
 }

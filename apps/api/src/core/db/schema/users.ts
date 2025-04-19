@@ -13,7 +13,7 @@ import {
     ID:                  bigserial({ mode: 'number' }).primaryKey(),
     user_login:          varchar('user_login',  { length: 60 }).notNull().default('').unique(),
     user_pass:           varchar('user_pass',   { length: 255 }).notNull().default(''),
-    user_nicename:       varchar('user_nicename',{ length: 50 }).notNull().default(''),
+    user_nicename:       varchar('user_nicename',{ length: 50 }).notNull().default('').unique(),
     user_email:          varchar('user_email',  { length:100 }).notNull().default('').unique(),
     user_url:            varchar('user_url',    { length:100 }).notNull().default(''),
     user_registered:     timestamp('user_registered', { mode: 'string' }).notNull().defaultNow(),
@@ -24,7 +24,7 @@ import {
   
   export const wp_usermeta = pgTable('wp_usermeta', {
     umeta_id: bigserial('umeta_id', { mode: 'number' }).primaryKey(),
-    user_id: integer('user_id').notNull().references(() => wp_users.ID),
+    user_id: integer('user_id').notNull().references(() => wp_users.ID, { onDelete: 'cascade' }),
     meta_key: varchar('meta_key', { length: 255 }),
     meta_value: jsonb('meta_value').notNull(),
   });

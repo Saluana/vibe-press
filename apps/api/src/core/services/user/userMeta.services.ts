@@ -1,5 +1,5 @@
 import { db, schema } from "@vp/core/db";
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
 import type { NodePgDatabase, NodePgTransaction } from 'drizzle-orm/node-postgres';
 import { getRoles } from '@vp/core/roles/roles';
@@ -78,24 +78,66 @@ export async function createUserMetaDefaults(userId: number, overrides: {
  * Retrieve user meta data.
  * 
  * @param {number} userId - The ID of the user.
- * @param {string} [metaKey] - Specific meta key to retrieve.
- * @returns {Promise<any>} The meta data for the user.
+ * @param {string} key - Specific meta key to retrieve.
+ * @param {DbOrTrx} [dbClient=db] - Optional database client or transaction.
+ * @returns {Promise<any|null>} The meta value or null if not found.
  */
-export async function getUserMeta(userId: number, metaKey?: string, dbClient: DbOrTrx = db) {
-  await serverHooks.doAction('userMeta.get:before', { userId, metaKey });
-  let result;
-  if (metaKey) {
-    result = await dbClient.select().from(schema.wp_usermeta)
-      .where(and(
-        eq(schema.wp_usermeta.user_id, userId),
-        eq(schema.wp_usermeta.meta_key, metaKey)
-      ));
-  } else {
-    result = await db.select().from(schema.wp_usermeta)
-      .where(eq(schema.wp_usermeta.user_id, userId));
+export async function getUserMeta(userId: number, key: string, dbClient: DbOrTrx = db): Promise<any | null> {
+  await serverHooks.doAction('userMeta.get:before', { userId, key });
+
+  const result = await dbClient.select().from(schema.wp_usermeta)
+    .where(and(
+      eq(schema.wp_usermeta.user_id, userId),
+      eq(schema.wp_usermeta.meta_key, key)
+    ));
+
+  const metaValue = result.length > 0 ? result[0].meta_value : null;
+
+  await serverHooks.doAction('userMeta.get:after', { userId, key, result: metaValue });
+  // Apply filter if needed - allowing modification of the single value
+  // const filteredValue = await serverHooks.applyFilters('userMeta.get:after', metaValue, userId, key);
+  // return filteredValue;
+  return metaValue;
+}
+
+/**
+ * Fetches multiple meta values for a specific user in a single query.
+ * 
+ * @param {number} userId - The ID of the user.
+ * @param {string[]} keys - An array of meta keys to fetch.
+ * @param {DbOrTrx} [dbClient=db] - Optional database client or transaction.
+ * @returns {Promise<Record<string, any>>} An object where keys are the requested meta_keys and values are the corresponding meta_values. Keys not found are omitted.
+ */
+export async function getUserMetaBatch(userId: number, keys: string[], dbClient: DbOrTrx = db): Promise<Record<string, any>> {
+  if (!userId || !keys || keys.length === 0) {
+    return {};
   }
-  await serverHooks.doAction('userMeta.get:after', { userId, metaKey, result });
-  return await serverHooks.applyFilters('userMeta.get', result);
+
+  const results = await dbClient
+    .select({
+      meta_key: schema.wp_usermeta.meta_key,
+      meta_value: schema.wp_usermeta.meta_value
+    })
+    .from(schema.wp_usermeta)
+    .where(
+      and(
+        eq(schema.wp_usermeta.user_id, userId),
+        inArray(schema.wp_usermeta.meta_key, keys)
+      )
+    );
+
+  const metaMap: Record<string, any> = {};
+  for (const row of results) {
+    // Ensure meta_key is not null before using it as an index
+    if (row.meta_key !== null && row.meta_key !== undefined) { 
+      metaMap[row.meta_key] = row.meta_value;
+    }
+  }
+
+  // Apply filter if needed (consider if necessary for batch get)
+  // metaMap = await serverHooks.applyFilters('userMeta.getBatch:after', metaMap, userId, keys);
+
+  return metaMap;
 }
 
 /**
@@ -148,7 +190,7 @@ export async function setUserRole(userId: number, role: string, dbClient: DbOrTr
 
 export async function getUserRole(userId: number, dbClient: DbOrTrx = db): Promise<string | null> {
   const meta = await getUserMeta(userId, 'wp_capabilities', dbClient);
-  if (meta.length === 0) return null;
-  const capabilities = meta[0].meta_value as Record<string, boolean>;
+  if (meta === null || typeof meta !== 'object') return null; // Check for null or non-object type
+  const capabilities = meta as Record<string, boolean>; // Safe assertion after check
   return Object.keys(capabilities).find(role => capabilities[role]) || null;
 }

@@ -4,7 +4,7 @@ import { hashPassword } from '@vp/core/services/auth.services';
 import { sql, and, or, like, eq, inArray } from 'drizzle-orm';
 import { createUserMetaDefaults, setUserMeta, setUserRole } from './userMeta.services';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
-import { PgSelect } from 'drizzle-orm/pg-core';
+
 
 // Correctly define Db/Transaction types
 type DbClient = typeof db;
@@ -90,6 +90,9 @@ export async function getUserByLoginOrEmail(identifier: string, dbClient: DbOrTr
  * @returns {Promise<Object|null>} The updated user record.
  */
 export async function updateUser(userId: number, updates: Record<string, any>, dbClient: DbOrTrx = db) {
+  // Apply filter to allow validation/mutation of updates before processing
+  updates = await serverHooks.applyFilters('user.update:before', updates, userId);
+  
   await serverHooks.doAction('user.update:before', { userId, updates });
 
   // Separate standard fields, roles, and meta
@@ -118,8 +121,10 @@ export async function updateUser(userId: number, updates: Record<string, any>, d
   if (standardUpdates.user_nicename !== undefined) userTableFields.user_nicename = standardUpdates.user_nicename;
   // Handle password hashing if present
   if (standardUpdates.user_pass) {
-      userTableFields.user_pass = await hashPassword(standardUpdates.user_pass);
-  }
+    userTableFields.user_pass = await hashPassword(standardUpdates.user_pass);
+    // Clear activation key when password is updated
+    userTableFields.user_activation_key = ''; 
+}
 
   // --- Add fields intended for usermeta to the metaUpdates object ---
   if (first_name !== undefined) metaUpdates.first_name = first_name;
