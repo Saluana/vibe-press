@@ -22,65 +22,175 @@ type DbOrTrx = DbClient | TransactionClient;
     administrator: {
       name: 'Administrator',
       capabilities: {
-        manage_options: true,
+        // General
+        read: true,
+        level_10: true,
+  
+        // Posts
         edit_posts: true,
         edit_others_posts: true,
-        publish_posts: true,
+        edit_published_posts: true,
+        edit_private_posts: true,
         delete_posts: true,
         delete_others_posts: true,
+        delete_published_posts: true,
+        delete_private_posts: true,
+        publish_posts: true,
+        read_private_posts: true,
+  
+        // Pages
         edit_pages: true,
         edit_others_pages: true,
-        publish_pages: true,
+        edit_published_pages: true,
+        edit_private_pages: true,
         delete_pages: true,
-        manage_categories: true,
+        delete_others_pages: true,
+        delete_published_pages: true,
+        delete_private_pages: true,
+        publish_pages: true,
+        read_private_pages: true,
+  
+        // Media
+        upload_files: true,
+  
+        // Comments
         moderate_comments: true,
+        edit_comment: true,
+        delete_comment: true,
+        approve_comments: true,
+  
+        // Taxonomies
+        manage_categories: true,
+        edit_terms: true,
+        delete_terms: true,
+        assign_terms: true,
+  
+        // Themes
+        switch_themes: true,
+        edit_themes: true,
+        install_themes: true,
+        update_themes: true,
+        delete_themes: true,
+  
+        // Plugins
         activate_plugins: true,
-        edit_users: true,
+        edit_plugins: true,
+        install_plugins: true,
+        update_plugins: true,
+        delete_plugins: true,
+  
+        // Users
         list_users: true,
-        read: true,
-        // Add more as needed
+        create_users: true,
+        edit_users: true,
+        delete_users: true,
+        promote_users: true,
+  
+        // Options, tools, admin
+        manage_options: true,
+        edit_dashboard: true,
+        import: true,
+        export: true,
+        unfiltered_html: true,
+        edit_files: true,
+        edit_css: true,
+        customize: true,
+        edit_theme_options: true,
+  
+        // Core updates
+        update_core: true,
       },
     },
+  
     editor: {
       name: 'Editor',
       capabilities: {
+        read: true,
+  
+        // Posts
         edit_posts: true,
         edit_others_posts: true,
-        publish_posts: true,
+        edit_published_posts: true,
+        edit_private_posts: true,
         delete_posts: true,
         delete_others_posts: true,
+        delete_published_posts: true,
+        delete_private_posts: true,
+        publish_posts: true,
+        read_private_posts: true,
+  
+        // Pages
         edit_pages: true,
         edit_others_pages: true,
-        publish_pages: true,
+        edit_published_pages: true,
+        edit_private_pages: true,
         delete_pages: true,
-        manage_categories: true,
+        delete_others_pages: true,
+        delete_published_pages: true,
+        delete_private_pages: true,
+        publish_pages: true,
+        read_private_pages: true,
+  
+        // Media
+        upload_files: true,
+  
+        // Comments
         moderate_comments: true,
-        read: true,
+        edit_comment: true,
+        delete_comment: true,
+        approve_comments: true,
+  
+        // Taxonomies
+        manage_categories: true,
+        edit_terms: true,
+        delete_terms: true,
+        assign_terms: true,
+  
+        // Theme options
+        edit_theme_options: true,
       },
     },
+  
     author: {
       name: 'Author',
       capabilities: {
-        edit_posts: true,
-        publish_posts: true,
-        delete_posts: true,
         read: true,
+  
+        // Posts (own only)
+        edit_posts: true,
+        edit_published_posts: true,
+        delete_posts: true,
+        delete_published_posts: true,
+        publish_posts: true,
+  
+        // Media
+        upload_files: true,
+  
+        // Taxonomies
+        assign_terms: true,
       },
     },
+  
     contributor: {
       name: 'Contributor',
       capabilities: {
-        edit_posts: true,
         read: true,
+        edit_posts: true,
+        delete_posts: true,
+  
+        // Taxonomies
+        assign_terms: true,
       },
     },
+  
     subscriber: {
       name: 'Subscriber',
       capabilities: {
         read: true,
       },
     },
-  } as const;
+  };
+  
   
   // Initialize roles (load from DB or use defaults)
   export async function initializeRoles(dbClient: DbOrTrx = db) {

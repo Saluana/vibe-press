@@ -198,6 +198,7 @@ export async function updateUser(userId: number, updates: Record<string, any>, d
   return await serverHooks.applyFilters('svc.user.update:filter:result', finalUser);
 }
 
+
 /**
  * Delete a user.
  *
@@ -306,7 +307,7 @@ export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
     conditions.push(
       and(
         eq(schema.wp_usermeta.meta_key, 'wp_capabilities'),
-        like(schema.wp_usermeta.meta_value, `%"${roles[0]}"%`) // Check within serialized string quotes
+        like(sql`${schema.wp_usermeta.meta_value}::text`, `%"${roles[0]}"%`) // Cast meta_value to text for LIKE
       )
     );
   }
@@ -320,7 +321,7 @@ export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
     conditions.push(
       and(
         eq(schema.wp_usermeta.meta_key, 'wp_capabilities'),
-        like(schema.wp_usermeta.meta_value, '%"author"%') // Check role name within quotes
+        like(sql`${schema.wp_usermeta.meta_value}::text`, '%"author"%') // Cast meta_value to text for LIKE
       )
     );
   }
@@ -332,7 +333,7 @@ export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
     conditions.push(
       and(
         eq(schema.wp_usermeta.meta_key, 'wp_capabilities'),
-        like(schema.wp_usermeta.meta_value, '%"author"%') // Assuming authors have published posts
+        like(sql`${schema.wp_usermeta.meta_value}::text`, '%"author"%') // Cast meta_value to text for LIKE
       )
     );
   }
