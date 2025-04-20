@@ -51,7 +51,7 @@ router.post('/register', async (req: Request, res: Response) => {
       throw new Error(`Invalid user object received after creation: ${JSON.stringify(user)}`);
     }
 
-    const token = signJwt(user.ID);
+    const token = await signJwt(user.ID);
 
     res.status(201).json({
       token,

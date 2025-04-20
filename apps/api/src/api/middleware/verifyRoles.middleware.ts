@@ -1,95 +1,123 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyJwt, userCan } from '@vp/core/services/auth.services';
+import { z } from 'zod';
+import { verifyJwt, userCan, JwtPayload } from '@vp/core/services/auth.services';
 import { wpError } from '@vp/core/utils/wpError';
 import { getUserRole } from '../../core/services/user/userMeta.services';
 import { getUserCapabilities } from '@vp/core/roles/roles';
 
 export interface AuthRequest extends Request {
-  user?: { id: number, role?: string, capabilities?: string[] };
+  user?: {
+    id: number;
+    role?: string;
+    capabilities?: string[];
+  };
 }
 
-// Define the configuration options interface
 interface RequireCapabilitiesOptions {
   capabilities: string[];
-  allowOwner?: boolean; // Default: false
-  ownerIdParam?: string; // e.g., 'id', 'userId'
-  ownerAllowedMethods?: string[]; // HTTP methods owner can use (e.g., ['GET', 'PUT'])
+  allowOwner?: boolean;
+  ownerIdParam?: string;
 }
 
-/**
- * Middleware to verify user capabilities or resource ownership.
- * Access is granted if:
- * 1. The user has ALL the specified capabilities.
- * 2. OR, if allowOwner is true, the user's ID matches the ID specified by ownerIdParam in the request params.
- *
- * @param config - Either an array of required capabilities (string[])
- *                 or a configuration object (RequireCapabilitiesOptions).
- */
-export function requireCapabilities(config: string[] | RequireCapabilitiesOptions) {
-  // Normalize config to always use the options object structure
-  const options: RequireCapabilitiesOptions = Array.isArray(config)
-    ? { capabilities: config, allowOwner: false } // If array, default allowOwner to false
-    : { allowOwner: false, ...config }; // If object, ensure allowOwner defaults to false if not provided
+const RequireCapabilitiesOptionsSchema = z.object({
+  capabilities: z.array(z.string()).min(0),
+  allowOwner: z.boolean().optional().default(false),
+  ownerIdParam: z.string().optional(),
+}).refine(data => !data.allowOwner || (data.allowOwner && typeof data.ownerIdParam === 'string' && data.ownerIdParam.length > 0), {
+  message: "ownerIdParam is required when allowOwner is true",
+  path: ["ownerIdParam"],
+});
 
-  const { capabilities, allowOwner, ownerIdParam, ownerAllowedMethods } = options;
+const CapabilitiesArraySchema = z.array(z.string()).min(0);
+
+const RequireCapabilitiesConfigSchema = z.union([
+  CapabilitiesArraySchema,
+  RequireCapabilitiesOptionsSchema
+]);
+
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json(wpError('rest_unauthorized', 'Authentication required.', 401));
+    return;
+  }
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded: JwtPayload = verifyJwt(token);
+    req.user = {
+      id: decoded.userId,
+      capabilities: Array.isArray(decoded.scope) ? decoded.scope : []
+    };
+    next();
+  } catch (e) {
+    console.error('Error verifying JWT:', e);
+    res.status(401).json(wpError('rest_invalid_token', 'Invalid or expired token.', 401));
+    return;
+  }
+}
+
+export function requireCapabilities(config: string[] | RequireCapabilitiesOptions) {
+  const parseResult = RequireCapabilitiesConfigSchema.safeParse(config);
+  if (!parseResult.success) {
+    console.error("Invalid requireCapabilities configuration:", parseResult.error.flatten());
+    throw new Error(`Invalid requireCapabilities configuration: ${parseResult.error.message}`);
+  }
+
+  const options: RequireCapabilitiesOptions = Array.isArray(parseResult.data)
+    ? { capabilities: parseResult.data, allowOwner: false }
+    : RequireCapabilitiesOptionsSchema.parse(parseResult.data);
+
+  const { capabilities: requiredCapabilities, allowOwner, ownerIdParam } = options;
 
   return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    // 1. Always verify JWT and set req.user.id from the token
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json(wpError('rest_unauthorized', 'Authentication required', 401));
-      return;
-    }
-    let userId: number;
-    try {
-      const token = authHeader.split(' ')[1];
-      const decoded = verifyJwt(token);
-      userId = decoded.userId;
-      req.user = { id: userId }; // Only trust ID from verified token
-    } catch (e) {
-      console.error('Error verifying JWT:', e);
-      res.status(401).json(wpError('rest_invalid_token', 'Invalid or expired token', 401));
+    if (!req.user?.id) {
+      console.error('requireCapabilities called without prior requireAuth or req.user not set properly.');
+      res.status(500).json(wpError('internal_server_error', 'Authentication context missing.', 500));
       return;
     }
 
-    // 2. Check required capabilities
-    const hasCapabilities = await userCan(userId, { capabilities });
-    if (hasCapabilities) {
-      // User has permissions, populate full user context and proceed
+    const userId = req.user.id;
+    const jwtCapabilities = req.user.capabilities || [];
+
+    let hasCapabilitiesInJwt = false;
+    if (jwtCapabilities.length > 0 && requiredCapabilities.length > 0) {
+      hasCapabilitiesInJwt = requiredCapabilities.every(cap => jwtCapabilities.includes(cap));
+    } else if (requiredCapabilities.length === 0) {
+      hasCapabilitiesInJwt = true;
+    }
+
+    if (hasCapabilitiesInJwt) {
       const role = await getUserRole(userId);
-      const userCaps = await getUserCapabilities(role || 'subscriber');
-      req.user = { id: userId, role: role || 'subscriber', capabilities: userCaps };
+      req.user.role = role || 'subscriber';
       return next();
     }
 
-    // 3. If userCan() fails, check owner access if allowed
-    if (
-      allowOwner &&
-      (!ownerAllowedMethods || ownerAllowedMethods.includes(req.method.toUpperCase())) &&
-      req.params[ownerIdParam || 'id'] &&
-      String(req.user.id) === String(req.params[ownerIdParam || 'id'])
-    ) {
+    console.log(`[requireCapabilities] JWT scope check failed or insufficient for user ${userId}. Falling back to userCan check.`);
+    const hasCapabilitiesViaUserCan = await userCan(userId, { capabilities: requiredCapabilities });
+
+    if (hasCapabilitiesViaUserCan) {
+      const role = await getUserRole(userId);
+      req.user.role = role || 'subscriber';
       return next();
     }
 
-    // 2. If capability check failed, check ownership (if configured)
     let isOwner = false;
     if (allowOwner && ownerIdParam && req.params[ownerIdParam]) {
       const resourceOwnerIdStr = req.params[ownerIdParam];
-      const resourceOwnerId = parseInt(resourceOwnerIdStr, 10);
-      if (!isNaN(resourceOwnerId) && userId === resourceOwnerId) {
+      if (String(userId) === String(resourceOwnerIdStr)) {
         isOwner = true;
-        // User is the owner, populate full user context and proceed
-        const role = await getUserRole(userId);
-        const userCaps = await getUserCapabilities(role || 'subscriber');
-        req.user = { id: userId, role: role || 'subscriber', capabilities: userCaps };
-        return next();
       }
     }
 
-    // 4. If neither capability nor ownership check passed, deny access
-    console.warn(`Access denied for user ${userId} to route requiring capabilities [${capabilities.join(', ')}]` + (allowOwner ? ` or ownership via param '${ownerIdParam}'` : ''));
-    res.status(403).json(wpError('rest_forbidden', 'You do not have permission to perform this action', 403));
+    if (isOwner) {
+      const role = await getUserRole(userId);
+      req.user.role = role || 'subscriber';
+      return next();
+    }
+
+    console.warn(`Access denied for user ${userId} to route requiring capabilities [${requiredCapabilities.join(', ')}]` + (allowOwner ? ` or ownership via param '${ownerIdParam}'` : ''));
+    res.status(403).json(wpError('rest_forbidden', 'You do not have permission to perform this action.', 403));
     return;
   };
 }

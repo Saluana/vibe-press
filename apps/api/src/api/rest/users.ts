@@ -3,7 +3,7 @@ import { serverHooks } from "@vp/core/hooks/hookEngine.server";
 import { getUsers, updateUser } from "@vp/core/services/user/user.services";
 import {setUserMeta, setUserRole} from "@vp/core/services/user/userMeta.services";
 import { Router, Request, Response } from "express";
-import { requireCapabilities } from "../middleware/verifyRoles.middleware";
+import { requireCapabilities, requireAuth } from "../middleware/verifyRoles.middleware";
 
 import {z} from 'zod';
 
@@ -93,8 +93,7 @@ const formatUserResponse = async (user: any) => {
   };
 };
 
-// @ts-expect-error
-router.get('/users', requireCapabilities(['read', 'list_users']), async (req: Request, res: Response) => {
+router.get('/users', requireAuth, requireCapabilities(['read', 'list_users']), async (req: Request, res: Response) => {
   try {
     const GetUsersValidation = z.object({
       context: z.enum(['view', 'embed', 'edit']).optional(),
@@ -137,65 +136,73 @@ router.get('/users', requireCapabilities(['read', 'list_users']), async (req: Re
       const errorResponse = wpError('400', 'Invalid query parameters', 400, {
         details: invalidParams.message || 'There was an issue with one or more provided query parameters.'
       });
-      return res.status(400).json(errorResponse);
+      res.status(400).json(errorResponse);
+      return;
     }
   
     try {
       const users = await getUsers(queryParams);
       // Map users to WP REST API shape
       const wpUsers = users.map(mapUserToWP);
-      return res.json(wpUsers);
+      res.json(wpUsers);
     } catch (err: any) {
       await serverHooks.doAction('rest.users.get:action:error', { error: err });
-      return res.status(500).json(wpError('500', err.message || 'Unknown error', 500));
+      res.status(500).json(wpError('500', err.message || 'Unknown error', 500));
     }
   } catch (err: any) {
     console.error('Error processing /users request:', err);
     await serverHooks.doAction('rest.users.get:action:error', { error: err });
-    return res.status(500).json(wpError('500', err.message || 'Unknown error', 500));
+    res.status(500).json(wpError('500', err.message || 'Unknown error', 500));
   }
 });
 
-// @ts-expect-error
-router.get('/users/me', requireCapabilities([]), async (req: Request, res: Response) => {
+router.get('/users/me', requireAuth, requireCapabilities([]), async (req: Request, res: Response) => {
   // Type assertion for TypeScript
   const userId = (req as any).user?.id;
   if (!userId) {
-    return res.status(401).json(wpError('rest_not_logged_in', 'Not logged in', 401));
+    res.status(401).json(wpError('rest_not_logged_in', 'Not logged in', 401));
+    return;
   }
 
   try {
     const users = await getUsers({ include: [userId] });
     if (!users || !users.length) {
-      return res.status(404).json(wpError('rest_user_invalid_id', 'User not found', 404));
+      res.status(404).json(wpError('rest_user_invalid_id', 'User not found', 404));
+      return;
     }
-    return res.json(mapUserToWP(users[0]));
+    res.json(mapUserToWP(users[0]));
   } catch (err: any) {
-    return res.status(500).json(wpError('rest_unknown', err.message || 'Unknown error', 500));
+    res.status(500).json(wpError('rest_unknown', err.message || 'Unknown error', 500));
   }
 });
   
 // Update a specific user
-// @ts-expect-error - Router typing issue, similar to GET route
-router.put('/users/:id', requireCapabilities(['edit_users']), async (req: Request, res: Response) => {
+router.put('/users/:id', requireAuth, requireCapabilities({
+  capabilities: ['edit_users'],
+  allowOwner: true,
+  ownerIdParam: 'id' // Corresponds to '/users/:id'
+}), async (req: Request, res: Response) => {
     const userId = parseInt(req.params.id, 10);
     if (isNaN(userId)) {
-        return res.status(400).json(wpError('invalid_user_id', 'Invalid user ID.', 400));
+        res.status(400).json(wpError('invalid_user_id', 'Invalid user ID.', 400));
+        return;
     }
 
     const validationResult = UpdateUserValidation.safeParse(req.body);
 
     if (!validationResult.success) {
-        return res.status(400).json(wpError('invalid_param', 'Invalid parameter(s).', 400, {
+        res.status(400).json(wpError('invalid_param', 'Invalid parameter(s).', 400, {
             invalid_params: validationResult.error.flatten().fieldErrors
         }));
+        return;
     }
 
     // Explicitly exclude password from update data for now
     const { password, ...userData } = validationResult.data;
 
     if (Object.keys(userData).length === 0) {
-        return res.status(400).json(wpError('no_data', 'No data provided for update.', 400));
+        res.status(400).json(wpError('no_data', 'No data provided for update.', 400));
+        return;
     }
 
     try {
@@ -218,19 +225,20 @@ router.put('/users/:id', requireCapabilities(['edit_users']), async (req: Reques
         // TODO: Add capability checks (e.g., 'edit_users' or editing self)
         const updatedUser = await updateUser(userId, dbUpdateData);
         if (!updatedUser) {
-            return res.status(404).json(wpError('rest_user_invalid_id', 'Invalid user ID.', 404));
+            res.status(404).json(wpError('rest_user_invalid_id', 'Invalid user ID.', 404));
+            return;
         }
 
         const wpUser = mapUserToWP(updatedUser);;
-        return res.json(wpUser);
+        res.json(wpUser);
     } catch (err: any) {
         console.error(`Error updating user ${userId}:`, err);
         await serverHooks.doAction('rest.user.update:action:error', { error: err, userId });
         // Handle potential specific errors like duplicate username/email if needed
         if (err.code === '...') { // Example: Check for specific DB errors
-            // return res.status(400).json(wpError('existing_user_login', 'Username already exists.', 400));
+            // res.status(400).json(wpError('existing_user_login', 'Username already exists.', 400));
         }
-        return res.status(500).json(wpError('rest_user_update_failed', err.message || 'Could not update user.', 500));
+        res.status(500).json(wpError('rest_user_update_failed', err.message || 'Could not update user.', 500));
     }
 });
 
