@@ -34,48 +34,41 @@ export function requireCapabilities(config: string[] | RequireCapabilitiesOption
   const { capabilities, allowOwner, ownerIdParam, ownerAllowedMethods } = options;
 
   return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    // Owner access check with allowed methods
-    if (
-      allowOwner &&
-      ownerAllowedMethods?.includes(req.method.toUpperCase()) &&
-      req.user &&
-      req.params[ownerIdParam || 'id'] &&
-      String(req.user.id) === String(req.params[ownerIdParam || 'id'])
-    ) {
-      return next();
-    }
+    // 1. Always verify JWT and set req.user.id from the token
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json(wpError('rest_unauthorized', 'Authentication required', 401));
       return;
     }
-
     let userId: number;
     try {
       const token = authHeader.split(' ')[1];
       const decoded = verifyJwt(token);
       userId = decoded.userId;
-
-      // Attach userId early for potential ownership check
-      req.user = { id: userId };
-
+      req.user = { id: userId }; // Only trust ID from verified token
     } catch (e) {
       console.error('Error verifying JWT:', e);
       res.status(401).json(wpError('rest_invalid_token', 'Invalid or expired token', 401));
       return;
     }
 
-    // --- Authorization Logic ---
-
-    // 1. Check required capabilities
+    // 2. Check required capabilities
     const hasCapabilities = await userCan(userId, { capabilities });
-
     if (hasCapabilities) {
       // User has permissions, populate full user context and proceed
       const role = await getUserRole(userId);
       const userCaps = await getUserCapabilities(role || 'subscriber');
       req.user = { id: userId, role: role || 'subscriber', capabilities: userCaps };
+      return next();
+    }
+
+    // 3. If userCan() fails, check owner access if allowed
+    if (
+      allowOwner &&
+      (!ownerAllowedMethods || ownerAllowedMethods.includes(req.method.toUpperCase())) &&
+      req.params[ownerIdParam || 'id'] &&
+      String(req.user.id) === String(req.params[ownerIdParam || 'id'])
+    ) {
       return next();
     }
 
@@ -94,7 +87,7 @@ export function requireCapabilities(config: string[] | RequireCapabilitiesOption
       }
     }
 
-    // 3. If neither capability nor ownership check passed, deny access
+    // 4. If neither capability nor ownership check passed, deny access
     console.warn(`Access denied for user ${userId} to route requiring capabilities [${capabilities.join(', ')}]` + (allowOwner ? ` or ownership via param '${ownerIdParam}'` : ''));
     res.status(403).json(wpError('rest_forbidden', 'You do not have permission to perform this action', 403));
     return;
