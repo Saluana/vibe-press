@@ -183,9 +183,13 @@ export async function deleteUserMeta(userId: number, metaKey: string, dbClient: 
 export async function setUserRole(userId: number, role: string, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('svc.userMeta.setRole:action:before', { userId, role });
   const roles = await getRoles(dbClient);
-  if (!roles[role]) throw new Error(`Role ${role} does not exist`);
+  const normalizedRole = role.toLowerCase(); // Normalize role
 
-  await setUserMeta(userId, 'wp_capabilities', { [role]: true }, dbClient);
+  // Check using the normalized role name
+  if (!roles[normalizedRole]) throw new Error(`Role ${role} does not exist`);
+
+  // Store using the normalized role name as the key
+  await setUserMeta(userId, 'wp_capabilities', { [normalizedRole]: true }, dbClient);
   await serverHooks.doAction('svc.userMeta.setRole:action:after', { userId, role });
 }
 

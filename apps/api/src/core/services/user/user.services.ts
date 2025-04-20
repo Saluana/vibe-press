@@ -1,10 +1,21 @@
 // src/core/services/user.service.ts
 import { db, schema } from '@vp/core/db';
-import { hashPassword } from '@vp/core/services/auth.services';
+import { hashPassword, getUserCapabilities } from '@vp/core/services/auth.services';
 import { sql, and, or, like, eq, inArray } from 'drizzle-orm';
 import { createUserMetaDefaults, setUserMeta, setUserRole } from './userMeta.services';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
 
+// Define a type for the user object structure returned by the query
+type UserQueryResult = {
+  id: number;
+  user_login: string;
+  user_nicename: string | null;
+  user_email: string | null;
+  user_url: string | null;
+  user_registered: string | null; // Assuming it's treated as string from DB
+  user_status: number | null;
+  display_name: string | null;
+};
 
 // Correctly define Db/Transaction types
 type DbClient = typeof db;
@@ -245,7 +256,7 @@ export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
     orderBy = 'name',
     slug,
     roles,
-    capabilities,
+    capabilities, // Keep param
     who,
     hasPublishedPosts
   } = params;
@@ -253,8 +264,17 @@ export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('svc.users.get:action:before', { params });
   // Start building the query
   let conditions = [];
+  let needsMetaJoin = false; // Flag to track if join is needed
+
   if (search) {
-    conditions.push(like(schema.wp_users.user_login, `%${search}%`));
+    // Search across multiple fields potentially
+    conditions.push(
+      or(
+        like(schema.wp_users.user_login, `%${search}%`),
+        like(schema.wp_users.user_email, `%${search}%`),
+        like(schema.wp_users.display_name, `%${search}%`)
+      )
+    );
   }
   if (exclude && exclude.length) {
     conditions.push(sql`${schema.wp_users.ID} NOT IN (${exclude.join(',')})`);
@@ -274,82 +294,56 @@ export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
     user_email: schema.wp_users.user_email,
     user_url: schema.wp_users.user_url,
     user_registered: schema.wp_users.user_registered,
-    user_activation_key: schema.wp_users.user_activation_key,
+    // user_activation_key: schema.wp_users.user_activation_key, // Often excluded for security
     user_status: schema.wp_users.user_status,
     display_name: schema.wp_users.display_name
   }).from(schema.wp_users);
   
   // Roles filtering - requires join with usermeta
   if (roles && roles.length) {
-    queryBuilder = queryBuilder
-      .innerJoin(
-        schema.wp_usermeta, 
-        eq(schema.wp_users.ID, schema.wp_usermeta.user_id)
-      );
+    needsMetaJoin = true; // Mark that we need the join
+    // Simple check for the first role using LIKE (can be improved for accuracy/multiple roles)
     conditions.push(
       and(
         eq(schema.wp_usermeta.meta_key, 'wp_capabilities'),
-        like(schema.wp_usermeta.meta_value, `%${roles[0]}%`)
+        like(schema.wp_usermeta.meta_value, `%"${roles[0]}"%`) // Check within serialized string quotes
       )
     );
-    // For multiple roles, we might need a more complex condition or multiple joins
-    // This is a simplified version checking for the first role
   }
   
-  // Capabilities filtering - requires join with usermeta
-  if (capabilities && capabilities.length) {
-    if (!roles || !roles.length) {
-      // Only join if we haven't already for roles
-      queryBuilder = queryBuilder
-        .innerJoin(
-          schema.wp_usermeta, 
-          eq(schema.wp_users.ID, schema.wp_usermeta.user_id)
-        );
-    }
-    conditions.push(
-      and(
-        eq(schema.wp_usermeta.meta_key, 'wp_capabilities'),
-        like(schema.wp_usermeta.meta_value, `%${capabilities[0]}%`)
-      )
-    );
-    // Similar simplification as roles for multiple capabilities
-  }
-  
+  // REMOVED: Capabilities filtering via direct SQL LIKE
+  // if (capabilities && capabilities.length) { ... } 
+
   // Who filtering - maps to specific roles
   if (who === 'authors') {
-    if (!roles || !roles.length) {
-      queryBuilder = queryBuilder
-        .innerJoin(
-          schema.wp_usermeta, 
-          eq(schema.wp_users.ID, schema.wp_usermeta.user_id)
-        );
-    }
+    needsMetaJoin = true;
     conditions.push(
       and(
         eq(schema.wp_usermeta.meta_key, 'wp_capabilities'),
-        like(schema.wp_usermeta.meta_value, '%author%')
+        like(schema.wp_usermeta.meta_value, '%"author"%') // Check role name within quotes
       )
     );
   }
   
-  // hasPublishedPosts filtering - requires checking post count in usermeta or posts table
-  // Since posts table isn't available, we'll look for any indicator in usermeta if possible
+  // hasPublishedPosts filtering - Placeholder logic remains
   if (hasPublishedPosts) {
-    if (!roles || !roles.length || !capabilities || !capabilities.length) {
+     needsMetaJoin = true;
+    // This is a placeholder - ideally we'd join with posts table
+    conditions.push(
+      and(
+        eq(schema.wp_usermeta.meta_key, 'wp_capabilities'),
+        like(schema.wp_usermeta.meta_value, '%"author"%') // Assuming authors have published posts
+      )
+    );
+  }
+
+  // Add the join only if needed by any filter
+  if (needsMetaJoin) {
       queryBuilder = queryBuilder
         .innerJoin(
           schema.wp_usermeta, 
           eq(schema.wp_users.ID, schema.wp_usermeta.user_id)
         );
-    }
-    // This is a placeholder - ideally we'd join with posts table, 
-    // but since it's not available we'll assume authors have published posts
-    conditions.push(
-      and(
-        eq(schema.wp_usermeta.meta_key, 'wp_capabilities'),
-        like(schema.wp_usermeta.meta_value, '%author%')
-      )
-    );
   }
 
   // Sorting
@@ -361,22 +355,50 @@ export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
     case 'slug': sortColumn = schema.wp_users.user_nicename; break;
     case 'email': sortColumn = schema.wp_users.user_email; break;
     case 'url': sortColumn = schema.wp_users.user_url; break;
+    // case 'include': sortColumn = sql`FIELD(${schema.wp_users.ID}, ${include ? include.join(',') : ''})`; break; // Needs careful handling if include is empty
     default: sortColumn = schema.wp_users.display_name;
   }
   const orderByClause = order === 'desc' ? sql`${sortColumn} DESC` : sql`${sortColumn} ASC`;
+  // Handle include order separately if needed
+  // if (orderBy === 'include' && include && include.length) {
+  //   orderByClause = sql`FIELD(${schema.wp_users.ID}, ${include.join(',')})`
+  // }
+
 
   // Pagination
   const actualOffset = typeof offset === 'number' ? offset : (page - 1) * perPage;
 
-  // Build and execute the query
+  // Build and execute the initial query
   const query = queryBuilder
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(orderByClause)
     .limit(perPage)
-    .offset(actualOffset);
+    .offset(actualOffset)
+    .groupBy(schema.wp_users.ID); // Group by user ID to avoid duplicates from join
 
 
-  const users = await query;
+  let users: UserQueryResult[] = await query; // Add type here
+
+  // Post-fetch filtering for capabilities (if requested)
+  if (capabilities && capabilities.length && users.length > 0) {
+    const normalizedRequiredCaps = capabilities.map(cap => cap.toLowerCase());
+
+    // Use Promise.all for potentially concurrent capability checks
+    const userCapabilityChecks = await Promise.all(
+        users.map(async (user: UserQueryResult) => { // Add type here
+            const userCapsMap = await getUserCapabilities(user.id, dbClient); // Use helper, returns lowercase keys
+            const hasAllRequired = normalizedRequiredCaps.every(reqCap => userCapsMap[reqCap] === true);
+            return { user, hasAllRequired };
+        })
+    );
+
+    // Filter the users based on the check results
+    users = userCapabilityChecks
+        .filter(result => result.hasAllRequired)
+        .map(result => result.user);
+  }
+
+
   await serverHooks.doAction('svc.users.get:action:after', { users });
   return await serverHooks.applyFilters('svc.users.get:filter:result', users);
 }

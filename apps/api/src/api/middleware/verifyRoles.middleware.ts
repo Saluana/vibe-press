@@ -80,9 +80,12 @@ export function requireCapabilities(config: string[] | RequireCapabilitiesOption
     const userId = req.user.id;
     const jwtCapabilities = req.user.capabilities || [];
 
+    const normalizedRequiredCapabilities = requiredCapabilities.map(cap => cap.toLowerCase());
+    const normalizedJwtCapabilities = jwtCapabilities.map(cap => cap.toLowerCase());
+
     let hasCapabilitiesInJwt = false;
-    if (jwtCapabilities.length > 0 && requiredCapabilities.length > 0) {
-      hasCapabilitiesInJwt = requiredCapabilities.every(cap => jwtCapabilities.includes(cap));
+    if (normalizedJwtCapabilities.length > 0 && normalizedRequiredCapabilities.length > 0) {
+      hasCapabilitiesInJwt = normalizedRequiredCapabilities.every(cap => normalizedJwtCapabilities.includes(cap));
     } else if (requiredCapabilities.length === 0) {
       hasCapabilitiesInJwt = true;
     }
