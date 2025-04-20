@@ -13,6 +13,7 @@ interface RequireCapabilitiesOptions {
   capabilities: string[];
   allowOwner?: boolean; // Default: false
   ownerIdParam?: string; // e.g., 'id', 'userId'
+  ownerAllowedMethods?: string[]; // HTTP methods owner can use (e.g., ['GET', 'PUT'])
 }
 
 /**
@@ -30,9 +31,19 @@ export function requireCapabilities(config: string[] | RequireCapabilitiesOption
     ? { capabilities: config, allowOwner: false } // If array, default allowOwner to false
     : { allowOwner: false, ...config }; // If object, ensure allowOwner defaults to false if not provided
 
-  const { capabilities, allowOwner, ownerIdParam } = options;
+  const { capabilities, allowOwner, ownerIdParam, ownerAllowedMethods } = options;
 
   return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    // Owner access check with allowed methods
+    if (
+      allowOwner &&
+      ownerAllowedMethods?.includes(req.method.toUpperCase()) &&
+      req.user &&
+      req.params[ownerIdParam || 'id'] &&
+      String(req.user.id) === String(req.params[ownerIdParam || 'id'])
+    ) {
+      return next();
+    }
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

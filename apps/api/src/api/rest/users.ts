@@ -155,6 +155,25 @@ router.get('/users', requireCapabilities(['read', 'list_users']), async (req: Re
     return res.status(500).json(wpError('500', err.message || 'Unknown error', 500));
   }
 });
+
+// @ts-expect-error
+router.get('/users/me', requireCapabilities([]), async (req: Request, res: Response) => {
+  // Type assertion for TypeScript
+  const userId = (req as any).user?.id;
+  if (!userId) {
+    return res.status(401).json(wpError('rest_not_logged_in', 'Not logged in', 401));
+  }
+
+  try {
+    const users = await getUsers({ include: [userId] });
+    if (!users || !users.length) {
+      return res.status(404).json(wpError('rest_user_invalid_id', 'User not found', 404));
+    }
+    return res.json(mapUserToWP(users[0]));
+  } catch (err: any) {
+    return res.status(500).json(wpError('rest_unknown', err.message || 'Unknown error', 500));
+  }
+});
   
 // Update a specific user
 // @ts-expect-error - Router typing issue, similar to GET route
