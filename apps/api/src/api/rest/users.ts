@@ -3,6 +3,7 @@ import { wpError } from "@vp/core/utils/wpError";
 import { serverHooks } from "@vp/core/hooks/hookEngine.server";
 import { GetUsersParams, getUsers, updateUser, deleteUser } from "@vp/core/services/user/user.services";
 import { Router, Request, Response } from "express";
+import { BASE_URL } from "@vp/core/config";
 import {
   requireCapabilities,
   requireAuth,
@@ -59,11 +60,11 @@ function mapUserToWP(
 
   // Start building the full object (similar to context=edit)
   const full: Record<string, any> = {
-    id: user.ID ?? user.id,
+    id: user.id,
     name: user.display_name,
     url: user.user_url,
     description: user.description ?? "",
-    link: `http://localhost:4000/author/${user.user_nicename ?? user.slug}/`,
+    link: `${BASE_URL}/author/${user.user_nicename ?? user.slug}/`,
     slug: user.user_nicename ?? user.slug,
     avatar_urls: {
       24: `https://secure.gravatar.com/avatar/${getMd5Hash(user.user_email)}?s=24&d=mm&r=g`,
@@ -79,13 +80,13 @@ function mapUserToWP(
     _links: {
       self: [
         {
-          href: `http://localhost:4000/wp-json/wp/v2/users/${user.ID ?? user.id}`,
+          href: `${BASE_URL}/wp-json/wp/v2/users/${user.id}`,
           targetHints: {
             allow: getAllowedMethods(viewer, user),
           },
         },
       ],
-      collection: [{ href: `http://localhost:4000/wp-json/wp/v2/users` }],
+      collection: [{ href: `${BASE_URL}/wp-json/wp/v2/users` }],
     },
   };
 

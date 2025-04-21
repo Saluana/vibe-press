@@ -5,17 +5,20 @@ import { sql, and, or, like, eq, inArray } from 'drizzle-orm';
 import { createUserMetaDefaults, setUserMeta, setUserRole } from './userMeta.services';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
 
-// Define a type for the user object structure returned by the query
-type UserQueryResult = {
+// Define a consistent return type for basic user info
+export type UserBasicInfo = {
   id: number;
   user_login: string;
   user_nicename: string | null;
   user_email: string | null;
   user_url: string | null;
-  user_registered: string | null; // Assuming it's treated as string from DB
+  user_registered: string | null;
   user_status: number | null;
   display_name: string | null;
 };
+
+// Define a type for the user object structure returned by the query (getUsers specific)
+type UserQueryResult = UserBasicInfo; // Reuse UserBasicInfo
 
 // Correctly define Db/Transaction types
 type DbClient = typeof db;
@@ -58,9 +61,18 @@ export async function createUser({
       user_url: '',
       user_activation_key: '',
       user_status: 0,
-    }).returning();
+    }).returning({
+      id: schema.wp_users.ID,
+      user_login: schema.wp_users.user_login,
+      user_nicename: schema.wp_users.user_nicename,
+      user_email: schema.wp_users.user_email,
+      user_url: schema.wp_users.user_url,
+      user_registered: schema.wp_users.user_registered,
+      user_status: schema.wp_users.user_status,
+      display_name: schema.wp_users.display_name,
+    });
 
-    await createUserMetaDefaults(userResult[0].ID, {
+    await createUserMetaDefaults(userResult[0].id, {
       nickname: display_name,
     }, trx);
 
@@ -70,7 +82,9 @@ export async function createUser({
   console.log('user service:', result[0]);
 
   await serverHooks.doAction('svc.user.create:action:after', { user: result[0] });
-  return await serverHooks.applyFilters('svc.user.create:filter:result', result[0]);
+  // Ensure the filtered result matches the expected structure if hooks modify it
+  // For now, assume hooks return the same structure or cast if necessary.
+  return await serverHooks.applyFilters('svc.user.create:filter:result', result[0] as UserBasicInfo);
 }
 
 /**
@@ -81,7 +95,17 @@ export async function createUser({
  */
 export async function getUserByLoginOrEmail(identifier: string, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('svc.user.get:action:before', { identifier });
-  const result = await dbClient.select().from(schema.wp_users)
+  const result = await dbClient.select({
+    id: schema.wp_users.ID,
+    user_login: schema.wp_users.user_login,
+    user_nicename: schema.wp_users.user_nicename,
+    user_email: schema.wp_users.user_email,
+    user_url: schema.wp_users.user_url,
+    user_registered: schema.wp_users.user_registered,
+    user_status: schema.wp_users.user_status,
+    display_name: schema.wp_users.display_name,
+    user_pass: schema.wp_users.user_pass // Needed for auth checks
+  }).from(schema.wp_users)
     .where(
       or(
         eq(schema.wp_users.user_login, identifier),
@@ -89,7 +113,9 @@ export async function getUserByLoginOrEmail(identifier: string, dbClient: DbOrTr
       )
     );
   await serverHooks.doAction('svc.user.get:action:after', { user: result[0] });
-  return await serverHooks.applyFilters('svc.user.get:filter:result', result[0] || null);
+  // Return type includes user_pass, define a specific type or cast
+  type UserWithPass = UserBasicInfo & { user_pass: string };
+  return await serverHooks.applyFilters('svc.user.get:filter:result', result[0] as UserWithPass || null);
 }
 
 /**
@@ -144,7 +170,8 @@ export async function updateUser(userId: number, updates: Record<string, any>, d
   if (description !== undefined) metaUpdates.description = description;
   if (locale !== undefined) metaUpdates.locale = locale;
 
-  let updatedUserResult: (typeof schema.wp_users.$inferSelect)[] = [];
+  // Use the defined UserBasicInfo type
+  let updatedUserResult: UserBasicInfo[] = [];
 
   // Use a transaction for atomicity
   await dbClient.transaction(async (trx) => {
@@ -153,7 +180,16 @@ export async function updateUser(userId: number, updates: Record<string, any>, d
            const result = await trx.update(schema.wp_users)
               .set(userTableFields)
               .where(eq(schema.wp_users.ID, userId))
-              .returning();
+              .returning({
+                id: schema.wp_users.ID,
+                user_login: schema.wp_users.user_login,
+                user_nicename: schema.wp_users.user_nicename,
+                user_email: schema.wp_users.user_email,
+                user_url: schema.wp_users.user_url,
+                user_registered: schema.wp_users.user_registered,
+                user_status: schema.wp_users.user_status,
+                display_name: schema.wp_users.display_name,
+              });
            if (result.length > 0) {
              updatedUserResult = result;
            } else if (Object.keys(metaUpdates).length === 0 && !roles) {
@@ -164,16 +200,20 @@ export async function updateUser(userId: number, updates: Record<string, any>, d
 
        // Fetch user data if only meta/roles updated OR if wp_users update failed but we continue
        if(updatedUserResult.length === 0 && (Object.keys(metaUpdates).length > 0 || roles)) {
-         const existingUser = await trx.select().from(schema.wp_users).where(eq(schema.wp_users.ID, userId));
+         const existingUser = await trx.select({
+            id: schema.wp_users.ID,
+            user_login: schema.wp_users.user_login,
+            user_nicename: schema.wp_users.user_nicename,
+            user_email: schema.wp_users.user_email,
+            user_url: schema.wp_users.user_url,
+            user_registered: schema.wp_users.user_registered,
+            user_status: schema.wp_users.user_status,
+            display_name: schema.wp_users.display_name,
+         }).from(schema.wp_users).where(eq(schema.wp_users.ID, userId));
          if (existingUser.length === 0) {
             throw new Error(`User with ID ${userId} not found.`);
          }
          updatedUserResult = existingUser; // Use existing user data to return
-       }
-
-       if (updatedUserResult.length === 0) {
-         // Should not happen if logic above is correct, but safeguard
-         throw new Error(`Failed to find or update user with ID ${userId}.`);
        }
 
       // 2. Update roles if provided
@@ -192,10 +232,12 @@ export async function updateUser(userId: number, updates: Record<string, any>, d
       }
   }); // End transaction
 
-  const finalUser = updatedUserResult[0] || null; // Should always have a user if transaction succeeded
+  // Use the defined UserBasicInfo type
+  const finalUser: UserBasicInfo | null = updatedUserResult[0] || null;
 
   await serverHooks.doAction('svc.user.update:action:after', { user: finalUser });
-  return await serverHooks.applyFilters('svc.user.update:filter:result', finalUser);
+  // Ensure the filtered result matches the expected structure
+  return await serverHooks.applyFilters('svc.user.update:filter:result', finalUser as UserBasicInfo | null);
 }
 
 
@@ -209,9 +251,19 @@ export async function deleteUser(userId: number, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('svc.user.delete:action:before', { userId });
   const result = await dbClient.delete(schema.wp_users)
     .where(eq(schema.wp_users.ID, userId))
-    .returning();
+    .returning({
+        id: schema.wp_users.ID,
+        user_login: schema.wp_users.user_login,
+        user_nicename: schema.wp_users.user_nicename,
+        user_email: schema.wp_users.user_email,
+        user_url: schema.wp_users.user_url,
+        user_registered: schema.wp_users.user_registered,
+        user_status: schema.wp_users.user_status,
+        display_name: schema.wp_users.display_name,
+    });
   await serverHooks.doAction('svc.user.delete:action:after', { user: result[0] });
-  return await serverHooks.applyFilters('svc.user.delete:filter:result', result[0] || null);
+  // Ensure the filtered result matches the expected structure
+  return await serverHooks.applyFilters('svc.user.delete:filter:result', result[0] as UserBasicInfo || null);
 }
 
 export type GetUsersParams = {
