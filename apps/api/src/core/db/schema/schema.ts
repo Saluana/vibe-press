@@ -3,3 +3,4 @@
 export * from './users';
 export * from './taxonomy';
 export * from './vpOptions';
+export * from './posts';
