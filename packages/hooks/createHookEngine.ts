@@ -90,6 +90,47 @@ export const HOOKS = {
   'svc.jwt.verify:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before verifying JWT' },
   'svc.jwt.verify:action:after': { kind: 'action', acceptedArgs: 2, description: 'After JWT is verified' },
 
+  // Posts hooks
+  'svc.post.create:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before creating a post (service layer)' },
+  'svc.post.create:action:after': { kind: 'action', acceptedArgs: 1, description: 'After creating a post (service layer)' },
+  'svc.post.create:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of post creation (service layer)' },
+
+  'svc.post.get:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before getting a post (service layer)' },
+  'svc.post.get:action:after': { kind: 'action', acceptedArgs: 1, description: 'After getting a post (service layer)' },
+  'svc.post.get:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of getting a post (service layer)' },
+
+  'svc.post.update:filter:input': { kind: 'filter', acceptedArgs: 1, description: 'Filter input data before updating a post (service layer)' },
+  'svc.post.update:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before updating a post (service layer)' },
+  'svc.post.update:action:after': { kind: 'action', acceptedArgs: 1, description: 'After updating a post (service layer)' },
+  'svc.post.update:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of post update (service layer)' },
+
+  'svc.post.delete:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before deleting a post (service layer)' },
+  'svc.post.delete:action:after': { kind: 'action', acceptedArgs: 1, description: 'After deleting a post (service layer)' },
+  'svc.post.delete:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of post deletion (service layer)' },
+
+  'svc.posts.get:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before getting multiple posts (service layer)' },
+  'svc.posts.get:action:after': { kind: 'action', acceptedArgs: 1, description: 'After getting multiple posts (service layer)' },
+  'svc.posts.get:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of getting multiple posts (service layer)' },
+
+  //Post Meta
+  'svc.postMeta.create:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before creating default post meta (service layer)' },
+  'svc.postMeta.create:action:after': { kind: 'action', acceptedArgs: 1, description: 'After creating default post meta (service layer)' },
+
+  'svc.postMeta.get:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before getting single post meta (service layer)' },
+  'svc.postMeta.get:action:after': { kind: 'action', acceptedArgs: 1, description: 'After getting single post meta (service layer)' },
+  'svc.postMeta.get:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of getting single post meta (service layer)' },
+
+  'svc.postMeta.getBatch:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before getting batch post meta (service layer)' },
+  'svc.postMeta.getBatch:action:after': { kind: 'action', acceptedArgs: 1, description: 'After getting batch post meta (service layer)' },
+  'svc.postMeta.getBatch:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of getting batch post meta (service layer)' },
+
+  'svc.postMeta.set:filter:input': { kind: 'filter', acceptedArgs: 1, description: 'Filter input data before setting post meta (service layer)' },
+  'svc.postMeta.set:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before setting post meta (service layer)' },
+  'svc.postMeta.set:action:after': { kind: 'action', acceptedArgs: 1, description: 'After setting post meta (service layer)' },
+
+  'svc.postMeta.delete:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before deleting post meta (service layer)' },
+  'svc.postMeta.delete:action:after': { kind: 'action', acceptedArgs: 1, description: 'After deleting post meta (service layer)' },
+  'svc.postMeta.delete:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of deleting post meta (service layer)' },
 } as const; // Use 'as const' for precise type inference
 
 // Base type for hook specifications (used internally)

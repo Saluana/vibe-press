@@ -1,3 +1,4 @@
+// apps/api/src/core/db/schema/posts.ts
 import { relations, InferSelectModel, InferInsertModel } from 'drizzle-orm';
 import {
   index,
@@ -84,7 +85,7 @@ export const wp_postmeta = pgTable(
     post_id: bigint('post_id', { mode: 'number' })
       .notNull()
       .references(() => wp_posts.ID, { onDelete: 'cascade' }),
-    meta_key: varchar('meta_key', { length: 255 }),
+    meta_key: varchar('meta_key', { length: 255 }).notNull(),
     meta_value: jsonb('meta_value'),
   },
   (table) => [

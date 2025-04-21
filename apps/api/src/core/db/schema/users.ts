@@ -31,7 +31,7 @@ import {
   export const wp_usermeta = pgTable('wp_usermeta', {
     umeta_id: bigserial('umeta_id', { mode: 'number' }).primaryKey(),
     user_id: integer('user_id').notNull().references(() => wp_users.ID, { onDelete: 'cascade' }),
-    meta_key: varchar('meta_key', { length: 255 }),
+    meta_key: varchar('meta_key', { length: 255 }).notNull(),
     meta_value: jsonb('meta_value').notNull(),
   }, (table) => [
     index("user_id_idx").on(table.user_id),
