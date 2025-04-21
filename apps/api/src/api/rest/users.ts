@@ -1,7 +1,7 @@
 // src/api/rest/users.ts
 import { wpError } from "@vp/core/utils/wpError";
 import { serverHooks } from "@vp/core/hooks/hookEngine.server";
-import { getUsers, updateUser } from "@vp/core/services/user/user.services";
+import { GetUsersParams, getUsers, updateUser, deleteUser } from "@vp/core/services/user/user.services";
 import { Router, Request, Response } from "express";
 import {
   requireCapabilities,
@@ -10,6 +10,7 @@ import {
   AuthRequest,
 } from "../middleware/verifyRoles.middleware";
 import { z } from "zod";
+import { sanitiseForContext, Context as RestContext } from "@vp/core/utils/restContext";
 
 const router = Router();
 
@@ -18,8 +19,6 @@ function getMd5Hash(email: string): string {
     .update(email.trim().toLowerCase())
     .digest("hex");
 }
-
-type Context = "view" | "embed" | "edit";
 
 /**
  * Return the list of HTTP methods the requesting user is allowed to use
@@ -45,39 +44,31 @@ function getAllowedMethods(
   return allowed;
 }
 
-function pickFields(obj: any, fields: string[]) {
-  const out: any = {};
-  for (const f of fields) {
-    if (f in obj) out[f] = obj[f];
-  }
-  return out;
-}
-
 /**
- * Map DB user → WP REST shape + per‑viewer sanitisation.
+ * Maps a user object from the database to the format expected by the WordPress REST API.
+ * Includes context-based field filtering and capability checks.
  */
 function mapUserToWP(
   user: any,
   viewer: { id: number; capabilities: string[] } | null,
-  context: Context
-): any {
-  const hash =
-    user.user_email && typeof user.user_email === "string"
-      ? getMd5Hash(user.user_email)
-      : "";
-  const baseUrl = "http://localhost:4000"; // adjust for prod
+  context: RestContext
+): Partial<any> {
 
-  const full: any = {
+  const isSelf = viewer && viewer.id === user.id;
+  const canEdit = isSelf || viewer?.capabilities?.includes("edit_users");
+
+  // Start building the full object (similar to context=edit)
+  const full: Record<string, any> = {
     id: user.ID ?? user.id,
     name: user.display_name,
     url: user.user_url,
     description: user.description ?? "",
-    link: `${baseUrl}/author/${user.user_nicename ?? user.slug}/`,
+    link: `http://localhost:4000/author/${user.user_nicename ?? user.slug}/`,
     slug: user.user_nicename ?? user.slug,
     avatar_urls: {
-      24: `https://secure.gravatar.com/avatar/${hash}?s=24&d=mm&r=g`,
-      48: `https://secure.gravatar.com/avatar/${hash}?s=48&d=mm&r=g`,
-      96: `https://secure.gravatar.com/avatar/${hash}?s=96&d=mm&r=g`,
+      24: `https://secure.gravatar.com/avatar/${getMd5Hash(user.user_email)}?s=24&d=mm&r=g`,
+      48: `https://secure.gravatar.com/avatar/${getMd5Hash(user.user_email)}?s=48&d=mm&r=g`,
+      96: `https://secure.gravatar.com/avatar/${getMd5Hash(user.user_email)}?s=96&d=mm&r=g`,
     },
     locale: user.locale,
     nickname: user.nickname,
@@ -88,41 +79,38 @@ function mapUserToWP(
     _links: {
       self: [
         {
-          href: `${baseUrl}/wp-json/wp/v2/users/${user.ID ?? user.id}`,
+          href: `http://localhost:4000/wp-json/wp/v2/users/${user.ID ?? user.id}`,
           targetHints: {
             allow: getAllowedMethods(viewer, user),
           },
         },
       ],
-      collection: [{ href: `${baseUrl}/wp-json/wp/v2/users` }],
+      collection: [{ href: `http://localhost:4000/wp-json/wp/v2/users` }],
     },
   };
 
-  // Sanitise for context
-  if (context === "embed") {
-    return pickFields(full, [
-      "id",
-      "name",
-      "slug",
-      "link",
-      "avatar_urls",
-      "_links",
-    ]);
+  // Add fields only visible in 'edit' context or to privileged users
+  if (canEdit) {
+    full.email = user.user_email;
+    full.registered_date = user.user_registered;
+    full.capabilities = user.capabilities || {};
+    full.extra_capabilities = user.extra_capabilities || {};
+    full.roles = user.roles || [];
   }
-  if (context === "view") {
-    return pickFields(full, [
-      "id",
-      "name",
-      "url",
-      "description",
-      "link",
-      "slug",
-      "avatar_urls",
-      "_links",
-    ]);
-  }
-  // edit ⇒ full
-  return full;
+
+  // Define field sets for different contexts
+  const userFieldSets = {
+    view: [
+      "id", "name", "url", "description", "link", "slug", "avatar_urls", "locale", "nickname", "first_name", "last_name", "roles", "meta", "_links"
+    ],
+    embed: [
+      "id", "name", "link", "slug", "avatar_urls", "_links"
+    ],
+    // 'edit' context returns the full object by default in sanitiseForContext
+  };
+
+  // Shape the object based on context using the utility
+  return sanitiseForContext(full, context, userFieldSets);
 }
 
 /*─────────────────────────────────────────────────────────────*/
@@ -170,9 +158,9 @@ router.get("/users", optionalAuth, async (req: AuthRequest, res: Response) => {
     /** 1. Build & validate query‑params */
     const GetUsersValidation = z
       .object({
-        context: z.enum(["view", "embed", "edit"]).optional(),
-        page: z.coerce.number().optional(),
-        per_page: z.coerce.number().optional(),
+        context: z.nativeEnum(RestContext).optional(),
+        page: z.coerce.number().int().min(1).optional(),
+        per_page: z.coerce.number().int().min(1).max(100).optional(),
         search: z.string().optional(),
         exclude: z
           .union([z.coerce.number(), z.array(z.coerce.number())])
@@ -203,7 +191,7 @@ router.get("/users", optionalAuth, async (req: AuthRequest, res: Response) => {
 
     const raw = req.query;
     const params = {
-      context: raw.context as Context | undefined,
+      context: raw.context as RestContext | undefined,
       page: raw.page,
       per_page: raw.per_page,
       search: raw.search,
@@ -229,7 +217,12 @@ router.get("/users", optionalAuth, async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    let { context = "view" } = validation.data;
+    // Explicitly type the validated data
+    const validatedData = validation.data;
+    // Destructure validated data, relying on Zod types and defaults
+    let { context = RestContext.view, page = 1, per_page = 10, ...restFilters } =
+      validatedData;
+
     const queryParams: any = {
       ...validation.data,
       page: validation.data.page ? Number(validation.data.page) : 1,
@@ -257,7 +250,9 @@ router.get("/users", optionalAuth, async (req: AuthRequest, res: Response) => {
           }
         : null;
 
-    if (context === "edit") {
+    // Check permission for 'edit' context
+    // Use enum member for comparison
+    if (context === RestContext.edit) {
       if (
         !viewer ||
         !viewer.capabilities.includes("list_users")
@@ -278,7 +273,8 @@ router.get("/users", optionalAuth, async (req: AuthRequest, res: Response) => {
       queryParams.who = "authors";
       queryParams.hasPublishedPosts = true;
       // Force context=view if someone set edit
-      context = context === "embed" ? "embed" : "view";
+      // Use enum members for comparison and assignment
+      context = context === RestContext.embed ? RestContext.embed : RestContext.view;
     }
 
     /** 4. Fetch + sanitise */
@@ -307,10 +303,10 @@ router.get(
   // @ts-expect-error
   async (req: AuthRequest, res: Response) => {
     let { id: rawId } = req.params;
-    const ctx = (req.query.context as string)?.toLowerCase();
-    const allowedContexts = ["view", "embed", "edit"] as const;
-    const context: typeof allowedContexts[number] =
-      allowedContexts.includes(ctx as any) ? (ctx as any) : "view";
+    const ctxQuery = (req.query.context as string)?.toLowerCase();
+    const allowedContexts = Object.values(RestContext); 
+    const context: RestContext =
+      allowedContexts.includes(ctxQuery as any) ? (ctxQuery as RestContext) : RestContext.view;
 
     // Resolve `:id` or `me`
     let userId: number | null = null;
@@ -327,7 +323,7 @@ router.get(
     }
 
     // If they asked for `edit`, enforce auth+cap
-    if (context === "edit") {
+    if (context === RestContext.edit) {
       if (!req.user) {
         return res
           .status(401)
@@ -434,17 +430,20 @@ router.put(
 
     try {
       const updatedUser = await updateUser(userId, dbData);
+
       if (!updatedUser) {
         res
           .status(404)
-          .json(wpError("rest_user_invalid_id", "Invalid user ID.", 404));
+          .json(wpError("rest_user_invalid_id", "User not found", 404));
         return;
       }
+
       const viewer = {
         id: (req as any).user?.id,
         capabilities: (req as any).user?.capabilities || [],
       };
-      res.json(mapUserToWP(updatedUser, viewer, "edit"));
+      res.json(mapUserToWP(updatedUser, viewer, RestContext.edit));
+      return;
     } catch (err: any) {
       console.error(`Error updating user ${userId}:`, err);
       await serverHooks.doAction("rest.user.update:action:error", {
@@ -458,6 +457,47 @@ router.put(
           500
         )
       );
+      return;
+    }
+  }
+);
+
+/*─────────────────────────────────────────────────────────────*/
+/* 🚮  DELETE /users/:id                                         */
+router.delete(
+  "/users/:id",
+  requireAuth,
+  requireCapabilities({
+    capabilities: ["delete_users"],
+    allowOwner: false,
+    ownerIdParam: "id",
+  }),
+  async (req: AuthRequest, res: Response) => {
+    const userId = Number(req.params.id);
+
+    try {
+      const deletedUser = await deleteUser(userId);
+      if (!deletedUser) {
+        res
+          .status(404)
+          .json(wpError("rest_user_invalid_id", "User not found", 404));
+        return;
+      }
+
+      // Success response
+      // Return the deleted user object (or just status)
+      res.json({
+        deleted: true,
+        previous: mapUserToWP(deletedUser, null, RestContext.view), // Show limited info
+      });
+      return;
+    } catch (err: any) {
+      console.error(`DELETE /users/${userId} failed`, err);
+      // Ensure return after sending error response
+      res
+        .status(500)
+        .json(wpError("rest_unknown", err.message || "Unknown error", 500));
+      return;
     }
   }
 );
