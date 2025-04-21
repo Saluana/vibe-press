@@ -92,7 +92,7 @@ export async function authenticateUsernamePassword(identifier: string, password:
     serverHooks.doAction('svc.user.login:action:error', { error: new Error('Invalid password') });
     throw new Error('Invalid password');
   }
-  const token = await signJwt(user.ID);
+  const token = await signJwt(user.id);
   serverHooks.doAction('svc.user.login:action:after', { user, token });
   return { user, token };
 }

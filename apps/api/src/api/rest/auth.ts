@@ -3,23 +3,10 @@ import { Router, Request, Response } from 'express';
 import { createUser } from '@vp/core/services/user/user.services';
 import { signJwt, authenticateUsernamePassword } from '@vp/core/services/auth.services';
 import { wpError } from '@vp/core/utils/wpError';
+import { RegisterValidation, LoginValidation } from '@vp/core/schemas/auth.schema';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
-import {z} from 'zod';
 
 const router = Router();
-
-// Validation schemas
-const RegisterValidation = z.object({
-  username: z.string().max(60),
-  email: z.string().email(),
-  password: z.string().min(6).max(255),
-  display_name: z.string().optional()
-}).strip();
-
-const LoginValidation = z.object({
-  username: z.string().max(60),
-  password: z.string().min(6).max(255)
-}).strip();
 
 // @ts-expect-error
 router.post('/register', async (req: Request, res: Response) => {
@@ -46,17 +33,17 @@ router.post('/register', async (req: Request, res: Response) => {
 
     console.log('DEBUG [auth]: Received user from createUser:', JSON.stringify(user));
 
-    if (!user || typeof user.ID === 'undefined') {
+    if (!user || typeof user.id === 'undefined') {
       console.error('ERROR [auth]: Invalid user object received from createUser:', JSON.stringify(user));
       throw new Error(`Invalid user object received after creation: ${JSON.stringify(user)}`);
     }
 
-    const token = await signJwt(user.ID);
+    const token = await signJwt(user.id);
 
     res.status(201).json({
       token,
       user: {
-        id: user.ID,
+        id: user.id,
         username: user.user_login,
         email: user.user_email,
         display_name: user.display_name,
@@ -108,7 +95,7 @@ router.post('/login', async (req: Request, res: Response) => {
     res.status(200).json({
       token,
       user: {
-        id: user.ID,
+        id: user.id,
         username: user.user_login,
         email: user.user_email,
         display_name: user.display_name,
