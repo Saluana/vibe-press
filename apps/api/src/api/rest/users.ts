@@ -486,6 +486,7 @@ router.delete(
           { required: "force=true" }
         )
       );
+      return;
     }
 
     const reassignId = Number(reassign);
@@ -498,6 +499,7 @@ router.delete(
           { required: "reassign=<user_id>" }
         )
       );
+      return;
     }
 
     // TODO: Check if reassignId exists and is a valid user? (Optional, WP might handle this differently)
