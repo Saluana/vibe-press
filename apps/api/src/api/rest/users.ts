@@ -1,7 +1,7 @@
 // src/api/rest/users.ts
 import { wpError } from "@vp/core/utils/wpError";
 import { serverHooks } from "@vp/core/hooks/hookEngine.server";
-import { GetUsersParams, getUsers, updateUser, deleteUser } from "@vp/core/services/user/user.services";
+import { GetUsersParams, getUsers, updateUser, deleteUser, createUser } from "@vp/core/services/user/user.services";
 import { Router, Request, Response } from "express";
 import { BASE_URL } from "@vp/core/config";
 import {
@@ -533,5 +533,109 @@ router.delete(
     }
   }
 );
+
+/*─────────────────────────────────────────────────────────────*/
+/* ✏️  CREATE /users                                             */
+router.post(
+  "/users",
+  requireAuth,
+  requireCapabilities({ capabilities: ["create_users"] }),
+  // @ts-expect-error
+  async (req: AuthRequest, res: Response) => {
+    // 1) Accept optional context query‑param (WP defaults create to 'edit')
+    const ctxQuery = String(req.query.context || "").toLowerCase();
+    const allowedCtx = Object.values(RestContext);
+    const context: RestContext = allowedCtx.includes(ctxQuery as any)
+      ? (ctxQuery as RestContext)
+      : RestContext.edit;
+
+    // 2) Validate body
+    const CreateUserSchema = z
+      .object({
+        username: z.string(),
+        name: z.string().optional(),
+        first_name: z.string().optional(),
+        last_name: z.string().optional(),
+        email: z.string().email(),
+        url: z.string().url().optional(),
+        description: z.string().optional(),
+        locale: z.enum(["", "en_US"]).optional(),
+        nickname: z.string().optional(),
+        slug: z.string().regex(/^[a-zA-Z0-9_-]+$/).optional(),
+        roles: z.array(z.string()).optional(),
+        password: z.string(),
+        meta: z.record(z.string(), z.any()).optional(),
+      })
+      .strict();
+
+    const parse = CreateUserSchema.safeParse(req.body);
+    if (!parse.success) {
+      return res.status(400).json(
+        wpError(
+          "rest_invalid_param",
+          "Invalid parameter(s).",
+          400,
+          { details: parse.error.format() }
+        )
+      );
+    }
+
+    const {
+      username,
+      name,
+      first_name,
+      last_name,
+      email,
+      url,
+      description,
+      locale,
+      nickname,
+      slug,
+      roles,
+      password,
+      meta,
+    } = parse.data;
+
+    try {
+      // 3) Create base user (wp_users)
+      const baseUser = await createUser({
+        user_login: username,
+        user_email: email,
+        user_pass: password,
+        display_name: name ?? username,
+      });
+
+      // 4) Apply all the extras (URL, meta, roles, slug, etc.)
+      const updatedUser = await updateUser(baseUser.id, {
+        user_url: url,
+        description,
+        locale,
+        nickname,
+        user_nicename: slug,
+        roles,
+        meta,
+      });
+
+      // 5) Build viewer for _links
+      const viewer = req.user
+        ? { id: req.user.id, capabilities: req.user.capabilities || [] }
+        : null;
+
+      // 6) Return WP‑compatible JSON
+      return res.status(201).json(
+        mapUserToWP(updatedUser, viewer, context)
+      );
+    } catch (err: any) {
+      console.error("POST /users failed", err);
+      await serverHooks.doAction("rest.users.create:action:error", {
+        error: err,
+      });
+      return res
+        .status(500)
+        .json(wpError("rest_unknown", err.message || "Unknown error", 500));
+    }
+  }
+);
+
 
 export default router;
