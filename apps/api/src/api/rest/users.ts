@@ -96,7 +96,6 @@ function mapUserToWP(
     full.registered_date = user.user_registered;
     full.capabilities = user.capabilities || {};
     full.extra_capabilities = user.extra_capabilities || {};
-    full.roles = user.roles || [];
   }
 
   // Define field sets for different contexts
@@ -475,8 +474,39 @@ router.delete(
   }),
   async (req: AuthRequest, res: Response) => {
     const userId = Number(req.params.id);
+    const { force, reassign } = req.query;
+
+    // --- Parameter Validation ---
+    if (force !== 'true') {
+      res.status(400).json(
+        wpError(
+          "rest_missing_callback_param",
+          "Missing parameter(s): force. You must pass force=true to delete a user.",
+          400,
+          { required: "force=true" }
+        )
+      );
+    }
+
+    const reassignId = Number(reassign);
+    if (!reassign || isNaN(reassignId) || reassignId <= 0) {
+      res.status(400).json(
+        wpError(
+          "rest_missing_callback_param",
+          "Missing or invalid parameter(s): reassign. You must provide a valid user ID to reassign content to.",
+          400,
+          { required: "reassign=<user_id>" }
+        )
+      );
+    }
+
+    // TODO: Check if reassignId exists and is a valid user? (Optional, WP might handle this differently)
 
     try {
+      // --- Placeholder for Reassignment Logic ---
+      console.log(`[TODO] Reassign posts/links from user ${userId} to user ${reassignId}`);
+      // Implement actual reassignment logic here when posts/other content types exist.
+
       const deletedUser = await deleteUser(userId);
       if (!deletedUser) {
         res
@@ -485,11 +515,10 @@ router.delete(
         return;
       }
 
-      // Success response
-      // Return the deleted user object (or just status)
+      // Success response: Use WP-compatible format
       res.json({
         deleted: true,
-        previous: mapUserToWP(deletedUser, null, RestContext.view), // Show limited info
+        previous: mapUserToWP(deletedUser, null, RestContext.view), // Show limited info of the deleted user
       });
       return;
     } catch (err: any) {
