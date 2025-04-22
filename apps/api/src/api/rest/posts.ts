@@ -20,6 +20,7 @@ import {
   Context as RestContext,
 } from '@vp/core/utils/restContext';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
+import { postBodySchema, listQuerySchema, singleQuerySchema, idParamSchema, deleteQuerySchema } from '@vp/core/schemas/posts.schema';
 
 const router = Router();
 
@@ -97,55 +98,6 @@ function mapPostToWP(post: any, context: RestContext): Partial<PostWPShape> {
 
   return sanitiseForContext(full, context, postFieldSets) as Partial<PostWPShape>;
 }
-
-/*─────────────────────────────────────────────────────────────*
- *  Validation Schemas
- *─────────────────────────────────────────────────────────────*/
-
-// GET /posts query
-const listQuerySchema = z.object({
-  context: z
-    .enum([RestContext.view, RestContext.embed, RestContext.edit])
-    .optional(),
-  page: z.coerce.number().int().positive().default(1),
-  per_page: z.coerce.number().int().min(1).max(100).default(10),
-  search: z.string().optional(),
-  author: z
-    .string()
-    .optional()
-    .transform(v => v ? v.split(',').map(x => Number(x)) : undefined),
-  status: z
-    .string()
-    .optional()
-    .transform(v => v ? v.split(',') : undefined),
-  type: z.string().optional(),
-});
-
-// GET/DELETE by ID
-const singleQuerySchema = z.object({
-  context: z
-    .enum([RestContext.view, RestContext.embed, RestContext.edit])
-    .optional(),
-});
-
-const idParamSchema = z.object({
-  id: z.coerce.number().int(),
-});
-
-// DELETE /posts query
-const deleteQuerySchema = z.object({
-  force: z.coerce.boolean().default(false),
-});
-
-// POST/PUT body
-const postBodySchema = z.object({
-  title: z.string().optional(),
-  content: z.string().optional(),
-  excerpt: z.string().optional(),
-  status: z.string().optional(),
-  slug: z.string().optional(),
-  meta: z.record(z.any()).optional(),
-});
 
 /*─────────────────────────────────────────────────────────────*
  *  GET /wp/v2/posts
