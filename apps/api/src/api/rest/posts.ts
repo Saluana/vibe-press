@@ -106,7 +106,7 @@ router.get('/posts', optionalAuth, async (req: AuthRequest, res: Response) => {
   const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json(
-      wpError('rest_invalid_param', 'Invalid query parameters', 400, {
+      wpError('rest_invalid_param', 'Invalid parameter(s)', 400, {
         details: parsed.error.flatten(),
       })
     );
@@ -125,9 +125,22 @@ router.get('/posts', optionalAuth, async (req: AuthRequest, res: Response) => {
   const context = isValidContext(ctxQ) ? ctxQ : RestContext.view;
 
   // edit context requires capability
+  const userCaps = req.user?.capabilities ?? [];
+  const hasEditPosts = userCaps.includes('edit_posts');
+  let filteredStatus: string[] | undefined = undefined;
+  // Default type to 'post' if not specified (WP Compatibility)
+  const filteredType = type ? [type] : ['post'];
+
+  // WordPress compatibility: Only show published posts unless user can edit_posts
+  if (!hasEditPosts) {
+    filteredStatus = ['publish'];
+  } else if (Array.isArray(status) && status.length > 0) {
+    filteredStatus = status;
+  }
+
   if (
     context === RestContext.edit &&
-    !(req.user?.capabilities ?? []).includes('edit_posts')
+    !hasEditPosts
   ) {
     res
       .status(403)
@@ -136,18 +149,43 @@ router.get('/posts', optionalAuth, async (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const posts = await getPosts({
+    // Get posts and total count from the service
+    const result = await getPosts({
       page,
       perPage: per_page,
       search,
       author: (Array.isArray(author) && author.length > 0) ? author : undefined,
-      statuses: (Array.isArray(status) && status.length > 0) ? status : undefined,
-      types: type ? [type] : undefined,
+      statuses: filteredStatus,
+      types: filteredType, // Use filteredType
     });
 
-    const wpPosts = posts.map((p) => mapPostToWP(p, context));
-    res.setHeader('X-WP-Total', wpPosts.length);
-    res.setHeader('X-WP-TotalPages', 1);
+    const { posts, totalCount } = result;
+    const totalPages = Math.ceil(totalCount / per_page);
+
+    // Map posts to WP shape
+    const wpPosts = posts.map((p: any) => mapPostToWP(p, context)); // Add type 'any' to fix lint
+
+    // Set headers
+    res.setHeader('X-WP-Total', totalCount);
+    res.setHeader('X-WP-TotalPages', totalPages);
+
+    // Construct Link header
+    const linkHeaderParts: string[] = [];
+    const urlBase = `${BASE_URL}/wp-json/wp/v2/posts`;
+    const queryParams = new URLSearchParams(req.query as any);
+
+    if (page > 1) {
+      queryParams.set('page', (page - 1).toString());
+      linkHeaderParts.push(`<${urlBase}?${queryParams.toString()}>; rel="prev"`);
+    }
+    if (page < totalPages) {
+      queryParams.set('page', (page + 1).toString());
+      linkHeaderParts.push(`<${urlBase}?${queryParams.toString()}>; rel="next"`);
+    }
+    if (linkHeaderParts.length > 0) {
+      res.setHeader('Link', linkHeaderParts.join(', '));
+    }
+
     res.json(wpPosts);
     return;
   } catch (e: any) {
@@ -166,9 +204,16 @@ router.get('/posts/:id', optionalAuth, async (req: AuthRequest, res: Response) =
   const idParams = idParamSchema.safeParse(req.params);
   const qParams = singleQuerySchema.safeParse(req.query);
   if (!idParams.success || !qParams.success) {
+    // Flatten errors for detailed reporting
+    const errors = { 
+      ...(idParams.success ? {} : idParams.error.flatten().fieldErrors),
+      ...(qParams.success ? {} : qParams.error.flatten().fieldErrors),
+    };
     res
       .status(400)
-      .json(wpError('rest_invalid_param', 'Invalid parameters', 400));
+      .json(wpError('rest_invalid_param', 'Invalid parameter(s)', 400, { 
+        details: { fieldErrors: errors } 
+      }));
     return;
   }
   const postId = idParams.data.id;
@@ -181,7 +226,7 @@ router.get('/posts/:id', optionalAuth, async (req: AuthRequest, res: Response) =
   ) {
     res
       .status(403)
-      .json(wpError('rest_forbidden', 'Cannot view post in edit context', 403));
+      .json(wpError('rest_forbidden', 'Sorry, you are not allowed to view this post in edit context.', 403));
     return;
   }
 
@@ -190,7 +235,7 @@ router.get('/posts/:id', optionalAuth, async (req: AuthRequest, res: Response) =
     if (!post) {
       res
         .status(404)
-        .json(wpError('rest_post_invalid_id', 'Post not found', 404));
+        .json(wpError('rest_post_invalid_id', 'Invalid post ID.', 404)); // Correct message
       return;
     }
 
@@ -216,7 +261,8 @@ router.post(
     const parse = postBodySchema.safeParse(req.body);
     if (!parse.success) {
       res.status(400).json(
-        wpError('rest_invalid_param', 'Invalid body', 400, {
+        // Correct message and use details
+        wpError('rest_invalid_param', 'Invalid parameter(s)', 400, {
           details: parse.error.flatten(),
         })
       );
@@ -257,13 +303,14 @@ router.put(
     if (!idParams.success) {
       res
         .status(400)
-        .json(wpError('rest_invalid_param', 'Invalid post ID', 400));
+        .json(wpError('rest_invalid_param', 'Invalid parameter(s): id', 400));
       return;
     }
     const parse = postBodySchema.safeParse(req.body);
     if (!parse.success) {
       res.status(400).json(
-        wpError('rest_invalid_param', 'Invalid body', 400, {
+         // Correct message and use details
+        wpError('rest_invalid_param', 'Invalid parameter(s)', 400, {
           details: parse.error.flatten(),
         })
       );
@@ -302,29 +349,47 @@ router.delete(
     const idParams = idParamSchema.safeParse(req.params);
     const qParams = deleteQuerySchema.safeParse(req.query);
     if (!idParams.success || !qParams.success) {
+      // Flatten errors for detailed reporting
+      const errors = { 
+        ...(idParams.success ? {} : idParams.error.flatten().fieldErrors),
+        ...(qParams.success ? {} : qParams.error.flatten().fieldErrors),
+      };
       res
         .status(400)
-        .json(wpError('rest_invalid_param', 'Invalid parameters', 400));
+        .json(wpError('rest_invalid_param', 'Invalid parameter(s)', 400, { 
+          details: { fieldErrors: errors } 
+        }));
       return;
     }
     const force = qParams.data.force;
+
+    // Get the post before deleting/trashing to return it
+    const postToDelete = await getPostById(idParams.data.id);
+    if (!postToDelete) {
+       res
+         .status(404)
+         .json(wpError('rest_post_invalid_id', 'Invalid post ID.', 404)); 
+       return;
+    }
+    const previousPostMapped = mapPostToWP(postToDelete, RestContext.view); // Map before potential delete
 
     try {
       if (!force) {
         // soft delete => trash
         const trashed = await updatePost(idParams.data.id, { post_status: 'trash' });
-        res.json({
-          trashed: true,
-          previous: mapPostToWP(trashed!, RestContext.view),
-        });
+        // WP returns the full trashed post object
+        res.json(mapPostToWP(trashed!, RestContext.view)); 
+        return;
+      } else {
+        // hard delete
+        await deletePost(idParams.data.id);
+        // WP returns { deleted: true, previous: { ... } }
+        res.json({ 
+          deleted: true, 
+          previous: previousPostMapped 
+        }); 
         return;
       }
-      const deleted = await deletePost(idParams.data.id);
-      res.json({
-        deleted: true,
-        previous: mapPostToWP(deleted!, RestContext.view),
-      });
-      return;
     } catch (e: any) {
       await serverHooks.doAction('rest.posts.delete:action:error', { error: e });
       res

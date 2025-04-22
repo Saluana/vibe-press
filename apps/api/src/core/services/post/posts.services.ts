@@ -1,6 +1,6 @@
 // apps/api/src/core/services/post/post.services.ts
 import { db, schema } from '@vp/core/db';
-import { sql, and, or, like, eq, inArray, not } from 'drizzle-orm';
+import { sql, and, or, like, eq, inArray, not, count } from 'drizzle-orm';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
 import {  setPostMeta, createPostMetaDefaults } from './postMeta.services';
 
@@ -309,6 +309,7 @@ export async function getPosts(params: GetPostsParams, dbClient: DbOrTrx = db) {
 
   await serverHooks.doAction('svc.posts.get:action:before', { params });
 
+  // Build conditions
   const cond: any[] = [];
   if (search) cond.push(or(like(schema.wp_posts.post_title, `%${search}%`), like(schema.wp_posts.post_content, `%${search}%`)));
   if (exclude?.length) cond.push(not(inArray(schema.wp_posts.ID, exclude)));
@@ -316,8 +317,18 @@ export async function getPosts(params: GetPostsParams, dbClient: DbOrTrx = db) {
   if (slug?.length) cond.push(inArray(schema.wp_posts.post_name, slug));
   if (author !== undefined) cond.push(Array.isArray(author) ? inArray(schema.wp_posts.post_author, author) : eq(schema.wp_posts.post_author, author));
   if (statuses?.length) cond.push(inArray(schema.wp_posts.post_status, statuses));
-  if (types?.length) cond.push(inArray(schema.wp_posts.post_type, types));
+  // Apply types filter if provided
+  if (types?.length) cond.push(inArray(schema.wp_posts.post_type, types)); 
+  const whereClause = cond.length ? and(...cond) : undefined;
 
+  // Get total count applying the same filters
+  const totalCountResult = await dbClient
+    .select({ value: count() })
+    .from(schema.wp_posts)
+    .where(whereClause); 
+  const totalCount = totalCountResult[0]?.value ?? 0;
+
+  // Build ordering
   const sortCol = (() => {
     switch (orderBy) {
       case 'id': return schema.wp_posts.ID;
@@ -332,6 +343,7 @@ export async function getPosts(params: GetPostsParams, dbClient: DbOrTrx = db) {
   const orderByClause = order === 'asc' ? sql`${sortCol} ASC` : sql`${sortCol} DESC`;
   const actualOffset = typeof offset === 'number' ? offset : (page - 1) * perPage;
 
+  // Get paginated posts
   const posts = (await dbClient
     .select({
       ID: schema.wp_posts.ID,
@@ -351,13 +363,17 @@ export async function getPosts(params: GetPostsParams, dbClient: DbOrTrx = db) {
       comment_count: schema.wp_posts.comment_count,
     })
     .from(schema.wp_posts)
-    .where(cond.length ? and(...cond) : undefined)
+    .where(whereClause) // Apply the same conditions here
     .orderBy(orderByClause)
     .limit(perPage)
     .offset(actualOffset)) as PostBasicInfo[];
 
-  await serverHooks.doAction('svc.posts.get:action:after', { posts });
-  return serverHooks.applyFilters('svc.posts.get:filter:result', posts);
+  // Return both posts and the total count
+  const result = { posts, totalCount };
+
+  await serverHooks.doAction('svc.posts.get:action:after', result);
+  // Ensure filters receive and return the new structure
+  return serverHooks.applyFilters('svc.posts.get:filter:result', result);
 }
 
 /*─────────────────────────────────────────────────────────────*
