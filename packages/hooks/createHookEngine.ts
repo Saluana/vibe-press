@@ -131,6 +131,12 @@ export const HOOKS = {
   'svc.postMeta.delete:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before deleting post meta (service layer)' },
   'svc.postMeta.delete:action:after': { kind: 'action', acceptedArgs: 1, description: 'After deleting post meta (service layer)' },
   'svc.postMeta.delete:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of deleting post meta (service layer)' },
+
+  'rest.posts.get:action:error': { kind: 'action', acceptedArgs: 1, description: 'On posts get failure' },
+  'rest.posts.single:action:error': { kind: 'action', acceptedArgs: 1, description: 'On single post get failure' },
+  'rest.posts.create:action:error': { kind: 'action', acceptedArgs: 1, description: 'On posts create failure' },
+  'rest.posts.update:action:error': { kind: 'action', acceptedArgs: 1, description: 'On posts update failure' },
+  'rest.posts.delete:action:error': { kind: 'action', acceptedArgs: 1, description: 'On posts delete failure' },
 } as const; // Use 'as const' for precise type inference
 
 // Base type for hook specifications (used internally)
