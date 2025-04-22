@@ -3,6 +3,7 @@ import express, { Request, Response } from "express";
 import pg from "pg";
 import AuthRouter from "@vp/server/rest/auth";
 import UserRouter from "@vp/server/rest/users";
+import PostRouter from "@vp/server/rest/posts";
 import "@vp/core/plugins/banned-names";
 import { requireCapabilities } from "@vp/server/middleware/verifyRoles.middleware";
 
@@ -42,6 +43,9 @@ app.use("/wp-json/wp/v2/", AuthRouter);
 
 // User endpoints
 app.use("/wp-json/wp/v2/", UserRouter);
+
+// Post endpoints
+app.use("/wp-json/wp/v2/", PostRouter);
 
 // Start server
 const port = parseInt(process.env.PORT || "4000", 10);

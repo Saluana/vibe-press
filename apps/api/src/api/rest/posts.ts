@@ -113,11 +113,11 @@ const listQuerySchema = z.object({
   author: z
     .string()
     .optional()
-    .transform(v => v ? v.split(',').map(x => Number(x)) : []),
+    .transform(v => v ? v.split(',').map(x => Number(x)) : undefined),
   status: z
     .string()
     .optional()
-    .transform(v => v ? v.split(',') : []),
+    .transform(v => v ? v.split(',') : undefined),
   type: z.string().optional(),
 });
 
@@ -188,8 +188,8 @@ router.get('/posts', optionalAuth, async (req: AuthRequest, res: Response) => {
       page,
       perPage: per_page,
       search,
-      author,
-      statuses: status,
+      author: (Array.isArray(author) && author.length > 0) ? author : undefined,
+      statuses: (Array.isArray(status) && status.length > 0) ? status : undefined,
       types: type ? [type] : undefined,
     });
 
