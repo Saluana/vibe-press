@@ -73,11 +73,12 @@ export const HOOKS = {
   'svc.userMeta.setRole:action:after': { kind: 'action', acceptedArgs: 1, description: 'After setUserRole (service layer)' },
 
   // --- Legacy/compat hooks (used elsewhere or for public API) ---
+  'rest.users.create:action:after': { kind: 'action', acceptedArgs: 1, description: 'After users create (rest layer)' },
   'rest.user.update:action:error': { kind: 'action', acceptedArgs: 1, description: 'On user update failure' },
   'rest.users.get:action:error': { kind: 'action', acceptedArgs: 1, description: 'On users get failure' },
   'rest.user.login:action:error': { kind: 'action', acceptedArgs: 1, description: 'On user login failure' },
   'rest.users.create:action:error': { kind: 'action', acceptedArgs: 1, description: 'On users create failure' },
-
+  
   'svc.user.can:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before checking user capabilities (service layer)' },
   'svc.user.can:action:after': { kind: 'action', acceptedArgs: 1, description: 'After checking user capabilities (service layer)' },
   'svc.user.can:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of user capability check (service layer)' },

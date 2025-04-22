@@ -303,6 +303,71 @@ router.get(
   }
 );
 
+/*─────────────────────────────────────────────────────────────*
+ * ➕ POST /users                                                 *
+ *─────────────────────────────────────────────────────────────*/
+router.post(
+  "/users",
+  requireAuth,
+  requireCapabilities(['create_users']),
+  async (req: AuthRequest, res: Response) => {
+    /** 1. Validate request body */
+    const validation = CreateUserSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json(
+        wpError('rest_invalid_param', 'Invalid parameters.', 400, {
+          details: validation.error.flatten(), // Use flatten for better structure
+        })
+      );
+      return;
+    }
+
+    const userData = validation.data;
+
+    try {
+      /** 2. Call service function */
+      const newUser = await createUser({
+        user_login: userData.username, // Map schema field to service field
+        user_email: userData.email,
+        user_pass: userData.password,
+        display_name: userData.name || userData.username, // Use name or fallback to username
+        user_url: userData.url,
+        user_nicename: userData.slug, // Map schema field to service field
+        meta: userData.meta, // Pass the meta object
+        roles: userData.roles, // Pass the roles array
+      });
+
+      /** 3. Shape response */
+      const viewer = req.user ? { id: req.user.id, capabilities: req.user.capabilities || [] } : null;
+      // Typically return 'edit' context for newly created resource
+      const mappedUser = mapUserToWP(newUser, viewer, RestContext.edit);
+
+      await serverHooks.doAction('rest.users.create:action:after', { user: mappedUser, request: req });
+
+      /** 4. Send response */
+      res.setHeader('Location', `${BASE_URL}/wp-json/wp/v2/users/${newUser.id}`);
+      res.status(201).json(mappedUser);
+
+    } catch (e: any) {
+      await serverHooks.doAction('rest.users.create:action:error', { error: e, request: req });
+
+      // Handle specific errors, e.g., duplicate username/email
+      if (e.message?.includes('UNIQUE constraint failed: wp_users.user_login')) {
+        res.status(400).json(wpError('rest_user_exists', 'Cannot create user.', 400, {
+          details: 'A user with that username already exists.'
+        }));
+      } else if (e.message?.includes('UNIQUE constraint failed: wp_users.user_email')) {
+        res.status(400).json(wpError('rest_user_exists', 'Cannot create user.', 400, {
+          details: 'A user with that email address already exists.'
+        }));
+      } else {
+        // Generic server error
+        console.error("Error creating user:", e);
+        res.status(500).json(wpError('rest_internal_error', 'Could not create user.', 500));
+      }
+    }
+  }
+);
 
 /*─────────────────────────────────────────────────────────────*/
 /* 📝  PUT /users/:id                                            */
@@ -464,90 +529,5 @@ router.delete(
     }
   }
 );
-
-/*─────────────────────────────────────────────────────────────*/
-/* ✏️  CREATE /users                                             */
-router.post(
-  "/users",
-  requireAuth,
-  requireCapabilities({ capabilities: ["create_users"] }),
-  // @ts-expect-error
-  async (req: AuthRequest, res: Response) => {
-    // 1) Accept optional context query‑param (WP defaults create to 'edit')
-    const ctxQuery = String(req.query.context || "").toLowerCase();
-    const allowedCtx = Object.values(RestContext);
-    const context: RestContext = allowedCtx.includes(ctxQuery as any)
-      ? (ctxQuery as RestContext)
-      : RestContext.edit;
-
-    const parse = CreateUserSchema.safeParse(req.body);
-    if (!parse.success) {
-      return res.status(400).json(
-        wpError(
-          "rest_invalid_param",
-          "Invalid parameter(s).",
-          400,
-          { details: parse.error.format() }
-        )
-      );
-    }
-
-    const {
-      username,
-      name,
-      first_name,
-      last_name,
-      email,
-      url,
-      description,
-      locale,
-      nickname,
-      slug,
-      roles,
-      password,
-      meta,
-    } = parse.data;
-
-    try {
-      // 3) Create base user (wp_users)
-      const baseUser = await createUser({
-        user_login: username,
-        user_email: email,
-        user_pass: password,
-        display_name: name ?? username,
-      });
-
-      // 4) Apply all the extras (URL, meta, roles, slug, etc.)
-      const updatedUser = await updateUser(baseUser.id, {
-        user_url: url,
-        description,
-        locale,
-        nickname,
-        user_nicename: slug,
-        roles,
-        meta,
-      });
-
-      // 5) Build viewer for _links
-      const viewer = req.user
-        ? { id: req.user.id, capabilities: req.user.capabilities || [] }
-        : null;
-
-      // 6) Return WP‑compatible JSON
-      return res.status(201).json(
-        mapUserToWP(updatedUser, viewer, context)
-      );
-    } catch (err: any) {
-      console.error("POST /users failed", err);
-      await serverHooks.doAction("rest.users.create:action:error", {
-        error: err,
-      });
-      return res
-        .status(500)
-        .json(wpError("rest_unknown", err.message || "Unknown error", 500));
-    }
-  }
-);
-
 
 export default router;

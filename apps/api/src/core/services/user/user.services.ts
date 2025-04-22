@@ -33,6 +33,10 @@ type DbOrTrx = DbClient | TransactionClient;
  * @param {string} params.user_email - The email of the user.
  * @param {string} params.user_pass - The password of the user.
  * @param {string} params.display_name - The display name of the user.
+ * @param {string} [params.user_url] - The URL of the user.
+ * @param {string} [params.user_nicename] - The nicename of the user.
+ * @param {Record<string, any>} [params.meta] - Additional user meta.
+ * @param {string[]} [params.roles] - The roles of the user.
  * @returns {Promise<Object>} The newly created user record.
  */
 export async function createUser({
@@ -40,13 +44,21 @@ export async function createUser({
   user_email,
   user_pass,
   display_name,
+  user_url = '',
+  user_nicename,
+  meta,
+  roles,
 }: {
   user_login: string;
   user_email: string;
   user_pass: string;
   display_name: string;
+  user_url?: string;
+  user_nicename?: string;
+  meta?: Record<string, any>;
+  roles?: string[];
 }, dbClient: DbOrTrx = db) {
-  await serverHooks.doAction('svc.user.create:action:before', { user_login, user_email, display_name });
+  await serverHooks.doAction('svc.user.create:action:before', { user_login, user_email, display_name, meta, roles });
 
   const hashed = await hashPassword(user_pass);
 
@@ -56,9 +68,9 @@ export async function createUser({
       user_email,
       user_pass: hashed,
       display_name,
-      user_nicename: user_login.toLowerCase(),
+      user_nicename: user_nicename || user_login.toLowerCase(),
       user_registered: new Date().toISOString(),
-      user_url: '',
+      user_url: user_url,
       user_activation_key: '',
       user_status: 0,
     }).returning({
@@ -72,9 +84,29 @@ export async function createUser({
       display_name: schema.wp_users.display_name,
     });
 
-    await createUserMetaDefaults(userResult[0].id, {
+    const newUser = userResult[0];
+
+    await createUserMetaDefaults(newUser.id, {
       nickname: display_name,
     }, trx);
+
+    // Set additional meta fields if provided
+    if (meta && Object.keys(meta).length > 0) {
+      for (const key in meta) {
+        if (Object.prototype.hasOwnProperty.call(meta, key)) {
+          await setUserMeta(newUser.id, key, meta[key], trx);
+        }
+      }
+    }
+    
+    // Set roles if provided (using the first role as primary capability)
+    if (roles && roles.length > 0) {
+      // Assuming setUserRole handles setting wp_capabilities meta
+      // We might need a dedicated function if roles need complex handling
+      await setUserMeta(newUser.id, 'wp_capabilities', { [roles[0].toLowerCase()]: true }, trx);
+      // Set primary role for easy access if needed
+      await setUserMeta(newUser.id, 'primary_role', roles[0].toLowerCase(), trx);
+    }
 
     return userResult;
   });

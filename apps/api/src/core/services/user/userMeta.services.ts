@@ -157,7 +157,8 @@ export async function setUserMeta(userId: number, metaKey: string, metaValue: an
       eq(schema.wp_usermeta.meta_key, metaKey)
     ));
   if (updated.rowCount === 0) {
-    await db.insert(schema.wp_usermeta).values({ user_id: userId, meta_key: metaKey, meta_value: metaValue });
+    // Use the passed dbClient (transaction) for the insert
+    await dbClient.insert(schema.wp_usermeta).values({ user_id: userId, meta_key: metaKey, meta_value: metaValue });
   }
   await serverHooks.doAction('svc.userMeta.set:action:after', { userId, metaKey, metaValue });
 }
