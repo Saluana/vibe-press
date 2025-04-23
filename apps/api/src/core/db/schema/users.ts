@@ -9,6 +9,7 @@ import {
     integer,
     timestamp,
     index,
+    unique,
   } from 'drizzle-orm/pg-core';
   
   export const wp_users = pgTable('wp_users', {
@@ -36,6 +37,7 @@ import {
   }, (table) => [
     index("user_id_idx").on(table.user_id),
     index("usermeta_meta_key_idx").on(table.meta_key),
+    unique("user_id_meta_key_unique").on(table.user_id, table.meta_key),
   ]);
 
   // Relations

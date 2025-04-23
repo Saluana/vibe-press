@@ -1,5 +1,5 @@
 import { db, schema } from "@vp/core/db";
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
 import type { NodePgDatabase, NodePgTransaction } from 'drizzle-orm/node-postgres';
 import { getRoles } from '@vp/core/roles/roles';
@@ -64,13 +64,9 @@ export async function createUserMetaDefaults(userId: number, overrides: {
     },
   ];
 
-  await dbClient.insert(schema.wp_usermeta).values(
-    metaValues.map(meta => ({
-      user_id: userId,
-      meta_key: meta.meta_key,
-      meta_value: meta.meta_value,
-    }))
-  );
+  // Use batchSetUserMeta for upsert capability and idempotency
+  const metaUpdates = Object.fromEntries(metaValues.map(meta => [meta.meta_key, meta.meta_value]));
+  await batchSetUserMeta(userId, metaUpdates, dbClient);
   await serverHooks.doAction('svc.userMeta.create:action:after', { userId, overrides });
 }
 
@@ -98,6 +94,26 @@ export async function getUserMeta(userId: number, key: string, dbClient: DbOrTrx
   const filteredValue = await serverHooks.applyFilters('svc.userMeta.get:filter:result', metaValue, userId, key);
   return filteredValue;
 
+}
+
+export async function batchSetUserMeta(userId: number, meta: Record<string, any>, dbClient: DbOrTrx = db) {
+  await serverHooks.doAction('svc.userMeta.batchUpdate:action:before', { userId, meta });
+   
+  const rows = Object.entries(meta).map(([meta_key, meta_value]) => ({
+    user_id: userId,
+    meta_key,
+    meta_value,
+  }));
+
+  await dbClient
+    .insert(schema.wp_usermeta)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [schema.wp_usermeta.user_id, schema.wp_usermeta.meta_key],
+      set: { meta_value: sql`EXCLUDED.meta_value` },
+    });
+
+  await serverHooks.doAction('svc.userMeta.batchUpdate:action:after', { userId, meta });
 }
 
 /**

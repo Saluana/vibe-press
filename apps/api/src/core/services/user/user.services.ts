@@ -2,7 +2,7 @@
 import { db, schema } from '@vp/core/db';
 import { hashPassword, getUserCapabilities } from '@vp/core/services/auth.services';
 import { sql, and, or, like, eq, inArray } from 'drizzle-orm';
-import { createUserMetaDefaults, setUserMeta, setUserRole } from './userMeta.services';
+import { createUserMetaDefaults, setUserMeta, setUserRole, batchSetUserMeta } from './userMeta.services';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
 
 // Define a consistent return type for basic user info
@@ -256,12 +256,12 @@ export async function updateUser(userId: number, updates: Record<string, any>, d
           await setUserRole(userId, primaryRole, trx); // Pass transaction client
       }
 
-      // 3. Update meta fields if provided
+      // 4. Batch update meta fields if provided
       if (Object.keys(metaUpdates).length > 0) {
-          for (const [key, value] of Object.entries(metaUpdates)) {
-              await setUserMeta(userId, key, value, trx); // Pass transaction client
-          }
+        await batchSetUserMeta(userId, metaUpdates, trx); // Pass transaction client
       }
+
+
   }); // End transaction
 
   // Use the defined UserBasicInfo type
@@ -396,9 +396,6 @@ export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
     );
   }
   
-  // REMOVED: Capabilities filtering via direct SQL LIKE
-  // if (capabilities && capabilities.length) { ... } 
-
   // Who filtering - maps to specific roles
   if (who === 'authors') {
     needsMetaJoin = true;

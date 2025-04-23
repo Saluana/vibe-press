@@ -71,6 +71,9 @@ export const HOOKS = {
   'svc.userMeta.delete:filter:result': { kind: 'filter', acceptedArgs: 1, description: 'Filter result of deleteUserMeta (service layer)' },
   'svc.userMeta.setRole:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before setUserRole (service layer)' },
   'svc.userMeta.setRole:action:after': { kind: 'action', acceptedArgs: 1, description: 'After setUserRole (service layer)' },
+  'svc.userMeta.batchUpdate:action:before': { kind: 'action', acceptedArgs: 1, description: 'Before batchUpdateUserMeta (service layer)' },
+  'svc.userMeta.batchUpdate:action:after': { kind: 'action', acceptedArgs: 1, description: 'After batchUpdateUserMeta (service layer)' },
+  'svc.userMeta.batchUpdate:filter:input': { kind: 'filter', acceptedArgs: 3, description: 'Filter input value before batchUpdateUserMeta (service layer)' },
 
   // --- Legacy/compat hooks (used elsewhere or for public API) ---
   'rest.users.create:action:after': { kind: 'action', acceptedArgs: 1, description: 'After users create (rest layer)' },
