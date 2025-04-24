@@ -82,6 +82,11 @@ import { env } from 'node:process';
          await persistEnable(slug);
 
 
+         // if the manifest opted into REST, tell the app to mount this router
+         if (manifest.rest) {
+           serverHooks.doAction('plugin.mount:rest', { slug, router: ctx.router });
+         }
+
          serverHooks.doAction('plugin.enabled', { slug, manifest });
        } catch (err) {
          console.error(`[PluginManager] Failed to enable plugin: ${slug}`, err);

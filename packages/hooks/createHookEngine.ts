@@ -145,6 +145,7 @@ export const HOOKS = {
   //plugins
   'plugin.enabled': { kind: 'action', acceptedArgs: 1, description: 'After plugin is enabled' },
   'plugin.disabled': { kind: 'action', acceptedArgs: 1, description: 'After plugin is disabled' },
+  'plugin.mount:rest': { kind: 'action', acceptedArgs: 1, description: 'After plugin REST router is mounted' },
 
   //server
   'server:starting': { kind: 'action', acceptedArgs: 0, description: 'Before server starts' },

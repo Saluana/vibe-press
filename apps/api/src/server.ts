@@ -24,6 +24,11 @@ pool.on("connect", () => {
 const app = express();
 app.use(express.json());
 
+serverHooks.addAction('plugin.mount:rest', ({ slug, router }) => {
+  console.log(`[Server] Mounting REST routes for plugin "${slug}" at /wp-json/plugins/${slug}`);
+  app.use(`/wp-json/plugins/${slug}`, router);
+});
+
 // --- NEW: initialize plugins
 (async () => {
   serverHooks.doAction('server:starting')

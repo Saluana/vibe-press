@@ -15,11 +15,9 @@ export default definePlugin(async (ctx: PluginContext) => {
     console.log('[banned-names] banned names plugin: before getUsers');
   });
 
-  console.log(db)
-
-  ctx.router.get('/banned-names', (req, res)=>{
+  ctx.router.get('/', (req, res)=>{
     res.json({ message: 'banned names plugin' });
-  })
+  });
 
   /* optional cleanup */
   return () => console.log('[banned-names] banned names plugin deactivated');
