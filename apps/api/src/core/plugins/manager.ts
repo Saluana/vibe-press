@@ -70,7 +70,7 @@ import { env } from 'node:process';
    
          /* 2. build context */
          const ctx: PluginContext = { slug, cache, db, hooks: serverHooks, router, env };
-   
+
          /* 3. normalise: function → object ------------------------------------ */
          const pluginObj = toPluginObject(plugin);
    

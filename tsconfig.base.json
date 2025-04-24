@@ -16,5 +16,9 @@
       "@vp/core/*": ["apps/api/src/core/*"],
       "@vp/db/*": ["apps/api/src/core/db/*"]
     }
-  }
+  },
+  "include": [
+    "apps/**/*",
+    "packages/**/*"
+  ]
 }
