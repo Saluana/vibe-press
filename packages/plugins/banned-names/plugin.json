@@ -1,0 +1,13 @@
+{
+    "name":        "banned-names",          
+    "version":     "1.0.0",
+    "description": "An example plugin",
+    "author":      "Your Name",
+    "main":        "/index.ts",   
+  
+    "requires":    { "vibepress": "^1.0.0" },
+    "autoload":    true,                
+    "showInAdmin": false,
+    "rest":        true,
+    "graphql":     false
+  }

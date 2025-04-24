@@ -1,0 +1,1 @@
+ALTER TABLE "wp_options" ALTER COLUMN "option_value" SET DEFAULT '[]'::jsonb;

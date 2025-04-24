@@ -141,6 +141,14 @@ export const HOOKS = {
   'rest.posts.create:action:error': { kind: 'action', acceptedArgs: 1, description: 'On posts create failure' },
   'rest.posts.update:action:error': { kind: 'action', acceptedArgs: 1, description: 'On posts update failure' },
   'rest.posts.delete:action:error': { kind: 'action', acceptedArgs: 1, description: 'On posts delete failure' },
+
+  //plugins
+  'plugin.enabled': { kind: 'action', acceptedArgs: 1, description: 'After plugin is enabled' },
+  'plugin.disabled': { kind: 'action', acceptedArgs: 1, description: 'After plugin is disabled' },
+
+  //server
+  'server:starting': { kind: 'action', acceptedArgs: 0, description: 'Before server starts' },
+  'server:started': { kind: 'action', acceptedArgs: 1, description: 'After server starts' },
 } as const; // Use 'as const' for precise type inference
 
 // Base type for hook specifications (used internally)

@@ -1,0 +1,853 @@
+{
+  "id": "57053d2a-05b5-4b49-9f61-89f818a0369b",
+  "prevId": "b7cc39eb-5d65-4459-857e-8378a32b4e2b",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.wp_usermeta": {
+      "name": "wp_usermeta",
+      "schema": "",
+      "columns": {
+        "umeta_id": {
+          "name": "umeta_id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meta_key": {
+          "name": "meta_key",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meta_value": {
+          "name": "meta_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "user_id_idx": {
+          "name": "user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "usermeta_meta_key_idx": {
+          "name": "usermeta_meta_key_idx",
+          "columns": [
+            {
+              "expression": "meta_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "wp_usermeta_user_id_wp_users_ID_fk": {
+          "name": "wp_usermeta_user_id_wp_users_ID_fk",
+          "tableFrom": "wp_usermeta",
+          "tableTo": "wp_users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "ID"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_id_meta_key_unique": {
+          "name": "user_id_meta_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "meta_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wp_users": {
+      "name": "wp_users",
+      "schema": "",
+      "columns": {
+        "ID": {
+          "name": "ID",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_login": {
+          "name": "user_login",
+          "type": "varchar(60)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "user_pass": {
+          "name": "user_pass",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "user_nicename": {
+          "name": "user_nicename",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "user_email": {
+          "name": "user_email",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "user_url": {
+          "name": "user_url",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "user_registered": {
+          "name": "user_registered",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "user_activation_key": {
+          "name": "user_activation_key",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "user_status": {
+          "name": "user_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "varchar(250)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        }
+      },
+      "indexes": {
+        "user_login_idx": {
+          "name": "user_login_idx",
+          "columns": [
+            {
+              "expression": "user_login",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_nicename_idx": {
+          "name": "user_nicename_idx",
+          "columns": [
+            {
+              "expression": "user_nicename",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_email_idx": {
+          "name": "user_email_idx",
+          "columns": [
+            {
+              "expression": "user_email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "wp_users_user_login_unique": {
+          "name": "wp_users_user_login_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_login"
+          ]
+        },
+        "wp_users_user_nicename_unique": {
+          "name": "wp_users_user_nicename_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_nicename"
+          ]
+        },
+        "wp_users_user_email_unique": {
+          "name": "wp_users_user_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wp_term_relationships": {
+      "name": "wp_term_relationships",
+      "schema": "",
+      "columns": {
+        "object_id": {
+          "name": "object_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "term_taxonomy_id": {
+          "name": "term_taxonomy_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "term_order": {
+          "name": "term_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "wp_term_relationships_term_taxonomy_id_wp_term_taxonomy_term_taxonomy_id_fk": {
+          "name": "wp_term_relationships_term_taxonomy_id_wp_term_taxonomy_term_taxonomy_id_fk",
+          "tableFrom": "wp_term_relationships",
+          "tableTo": "wp_term_taxonomy",
+          "columnsFrom": [
+            "term_taxonomy_id"
+          ],
+          "columnsTo": [
+            "term_taxonomy_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wp_term_taxonomy": {
+      "name": "wp_term_taxonomy",
+      "schema": "",
+      "columns": {
+        "term_taxonomy_id": {
+          "name": "term_taxonomy_id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "term_id": {
+          "name": "term_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "taxonomy": {
+          "name": "taxonomy",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "parent": {
+          "name": "parent",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "wp_term_taxonomy_term_id_wp_terms_term_id_fk": {
+          "name": "wp_term_taxonomy_term_id_wp_terms_term_id_fk",
+          "tableFrom": "wp_term_taxonomy",
+          "tableTo": "wp_terms",
+          "columnsFrom": [
+            "term_id"
+          ],
+          "columnsTo": [
+            "term_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wp_termmeta": {
+      "name": "wp_termmeta",
+      "schema": "",
+      "columns": {
+        "meta_id": {
+          "name": "meta_id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "term_id": {
+          "name": "term_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meta_key": {
+          "name": "meta_key",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meta_value": {
+          "name": "meta_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "wp_termmeta_term_id_wp_terms_term_id_fk": {
+          "name": "wp_termmeta_term_id_wp_terms_term_id_fk",
+          "tableFrom": "wp_termmeta",
+          "tableTo": "wp_terms",
+          "columnsFrom": [
+            "term_id"
+          ],
+          "columnsTo": [
+            "term_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wp_terms": {
+      "name": "wp_terms",
+      "schema": "",
+      "columns": {
+        "term_id": {
+          "name": "term_id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "term_group": {
+          "name": "term_group",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wp_options": {
+      "name": "wp_options",
+      "schema": "",
+      "columns": {
+        "option_id": {
+          "name": "option_id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "option_name": {
+          "name": "option_name",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "option_value": {
+          "name": "option_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "autoload": {
+          "name": "autoload",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'yes'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "wp_options_option_name_unique": {
+          "name": "wp_options_option_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "option_name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wp_postmeta": {
+      "name": "wp_postmeta",
+      "schema": "",
+      "columns": {
+        "meta_id": {
+          "name": "meta_id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "post_id": {
+          "name": "post_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meta_key": {
+          "name": "meta_key",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meta_value": {
+          "name": "meta_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "post_id_idx": {
+          "name": "post_id_idx",
+          "columns": [
+            {
+              "expression": "post_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "postmeta_meta_key_idx": {
+          "name": "postmeta_meta_key_idx",
+          "columns": [
+            {
+              "expression": "meta_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "wp_postmeta_post_id_wp_posts_ID_fk": {
+          "name": "wp_postmeta_post_id_wp_posts_ID_fk",
+          "tableFrom": "wp_postmeta",
+          "tableTo": "wp_posts",
+          "columnsFrom": [
+            "post_id"
+          ],
+          "columnsTo": [
+            "ID"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wp_posts": {
+      "name": "wp_posts",
+      "schema": "",
+      "columns": {
+        "ID": {
+          "name": "ID",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "post_author": {
+          "name": "post_author",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "post_date": {
+          "name": "post_date",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "post_date_gmt": {
+          "name": "post_date_gmt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "post_content": {
+          "name": "post_content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "post_title": {
+          "name": "post_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "post_excerpt": {
+          "name": "post_excerpt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "post_status": {
+          "name": "post_status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'publish'"
+        },
+        "comment_status": {
+          "name": "comment_status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "ping_status": {
+          "name": "ping_status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "post_password": {
+          "name": "post_password",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "post_name": {
+          "name": "post_name",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "to_ping": {
+          "name": "to_ping",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pinged": {
+          "name": "pinged",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "post_modified": {
+          "name": "post_modified",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "post_modified_gmt": {
+          "name": "post_modified_gmt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "post_content_filtered": {
+          "name": "post_content_filtered",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "post_parent": {
+          "name": "post_parent",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "guid": {
+          "name": "guid",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "menu_order": {
+          "name": "menu_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "post_type": {
+          "name": "post_type",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'post'"
+        },
+        "post_mime_type": {
+          "name": "post_mime_type",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "comment_count": {
+          "name": "comment_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "post_name_idx": {
+          "name": "post_name_idx",
+          "columns": [
+            {
+              "expression": "post_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "type_status_date_idx": {
+          "name": "type_status_date_idx",
+          "columns": [
+            {
+              "expression": "post_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "post_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "post_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ID",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "post_parent_idx": {
+          "name": "post_parent_idx",
+          "columns": [
+            {
+              "expression": "post_parent",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "post_author_idx": {
+          "name": "post_author_idx",
+          "columns": [
+            {
+              "expression": "post_author",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "wp_posts_post_author_wp_users_ID_fk": {
+          "name": "wp_posts_post_author_wp_users_ID_fk",
+          "tableFrom": "wp_posts",
+          "tableTo": "wp_users",
+          "columnsFrom": [
+            "post_author"
+          ],
+          "columnsTo": [
+            "ID"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
