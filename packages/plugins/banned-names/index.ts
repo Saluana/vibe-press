@@ -1,7 +1,5 @@
 import {definePlugin } from "@vp/core/plugins";
 import { PluginContext } from "@vp/core/plugins/pluginManifest.schema";
-import { db } from "@vp/core/db";
-
 
 
 export default definePlugin(async (ctx: PluginContext) => {
@@ -15,9 +13,11 @@ export default definePlugin(async (ctx: PluginContext) => {
     console.log('[banned-names] banned names plugin: before getUsers');
   });
 
-  ctx.router.get('/', (req, res)=>{
-    res.json({ message: 'banned names plugin' });
+  ctx.router.get('/', async (req, res)=>{
+    const users = await ctx.services.user.getUserByLoginOrEmail('admin');
+    res.json({ users: users });
   });
+
 
   /* optional cleanup */
   return () => console.log('[banned-names] banned names plugin deactivated');

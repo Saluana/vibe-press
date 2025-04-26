@@ -13,6 +13,7 @@
    import type { PluginContext } from '@vp/core/plugins/pluginManifest.schema';
 import router from '../../api/rest/auth';
 import { env } from 'node:process';
+import service from '@vp/core/services';
 
    
    /* ------------------------------------------------------------------ */
@@ -69,7 +70,7 @@ import { env } from 'node:process';
          const { manifest, plugin } = await this.load(slug);
    
          /* 2. build context */
-         const ctx: PluginContext = { slug, cache, db, hooks: serverHooks, router, env };
+         const ctx: PluginContext = { slug, cache, services: service, hooks: serverHooks, router, env };
 
          /* 3. normalise: function → object ------------------------------------ */
          const pluginObj = toPluginObject(plugin);
@@ -101,7 +102,7 @@ import { env } from 'node:process';
          return;
        }
        try {
-         await plugin.deactivate?.({ slug, cache, db, hooks: serverHooks, router, env });
+         await plugin.deactivate?.({ slug, cache, services: service, hooks: serverHooks, router, env });
          this.active.delete(slug);
          await persistDisable(slug);
          serverHooks.doAction('plugin.disabled', { slug });

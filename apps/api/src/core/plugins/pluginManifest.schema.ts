@@ -3,6 +3,7 @@ import { Router } from "express";
 import { db } from "@vp/core/db";
 import {HookAPI} from "@vp/packages/hooks/createHookEngine";
 import { cache } from "@vp/core/utils/cacheManager";
+import { Services } from "@vp/core/services";
 
 export const PluginManifestSchema = z.object({
     name:        z.string().regex(/^[a-z0-9-_]+$/),          // unique slug
@@ -36,7 +37,7 @@ export interface PluginContext {
   cache:    typeof cache
 
   /** your Drizzle-ORM client */
-  db:       typeof db
+  services: Services
 
   /** your hook engine: typed addAction / doAction / removeAction, etc */
   hooks:    HookAPI

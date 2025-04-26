@@ -25,6 +25,14 @@ type DbClient = typeof db;
 type TransactionClient = Parameters<DbClient['transaction']>[0] extends (client: infer C) => any ? C : never;
 type DbOrTrx = DbClient | TransactionClient;
 
+export const userServices = {
+  createUser,
+  getUserByLoginOrEmail,
+  updateUser,
+  deleteUser,
+  getUsers
+} as const;
+
 /**
  * Creates a new user and inserts their information into the database.
  * 
