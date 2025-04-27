@@ -331,12 +331,16 @@ export type GetUsersParams = {
   hasPublishedPosts?: boolean;
 };
 
+import { GetUsersValidation } from '../../schemas/users.schema';
 /**
  * Retrieves users based on various query parameters (pagination, search, sorting, filtering, etc).
  * @param params - The parameters to filter, sort, and paginate users.
  * @returns A list of users matching the query.
  */
 export async function getUsers(params: GetUsersParams, dbClient: DbOrTrx = db) {
+
+  const validatedParams = GetUsersValidation.parse(params);
+  
   const {
     context = 'view',
     page = 1,

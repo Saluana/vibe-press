@@ -12,6 +12,8 @@ import {
 } from "../middleware/verifyRoles.middleware";
 import { sanitiseForContext, Context as RestContext } from "@vp/core/utils/restContext";
 import { CreateUserSchema, UpdateUserValidation, GetUsersValidation } from "@vp/core/schemas/users.schema";
+import { formatZodErrorForWpRest } from "@vp/core/utils/wpError";
+import { ZodError } from "zod";
 
 const router = Router();
 
@@ -115,11 +117,11 @@ function mapUserToWP(
 
 
 /*─────────────────────────────────────────────────────────────*/
-/* 📜  GET /users                                                */
+/* 📜  GET /users                    
+/*─────────────────────────────────────────────────────────────*/
+// @ts-expect-error
 router.get("/users", optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
-
-
     const raw = req.query;
     const params = {
       context: raw.context as RestContext | undefined,
@@ -138,30 +140,19 @@ router.get("/users", optionalAuth, async (req: AuthRequest, res: Response) => {
       has_published_posts: raw.has_published_posts,
     };
 
-    const validation = GetUsersValidation.safeParse(params);
-    if (!validation.success) {
-      res.status(400).json(
-        wpError("rest_invalid_param", "Invalid query parameters.", 400, {
-          details: validation.error.format(),
-        })
-      );
-      return;
-    }
 
-    // Explicitly type the validated data
-    const validatedData = validation.data;
     // Destructure validated data, relying on Zod types and defaults
     let { context = RestContext.view, page = 1, per_page = 10, ...restFilters } =
-      validatedData;
+      params;
 
     const queryParams: any = {
-      ...validation.data,
-      page: validation.data.page ? Number(validation.data.page) : 1,
-      perPage: validation.data.per_page
-        ? Number(validation.data.per_page)
+      ...params,
+      page: params.page ? Number(params.page) : 1,
+      per_page: params.per_page
+        ? Number(params.per_page)
         : 10,
-      order: validation.data.order as "asc" | "desc" | undefined,
-      orderBy: validation.data.orderby as
+      order: params.order as "asc" | "desc" | undefined,
+      orderby: params.orderby as
         | "id"
         | "include"
         | "name"
@@ -215,6 +206,10 @@ router.get("/users", optionalAuth, async (req: AuthRequest, res: Response) => {
     );
     res.json(wpUsers);
   } catch (err: any) {
+    if (err instanceof ZodError) {
+      const formattedError = formatZodErrorForWpRest(err);
+      return res.status(formattedError.status).json(formattedError.body);
+    }
     console.error("Error processing /users:", err);
     await serverHooks.doAction("rest.users.get:action:error", { error: err });
     res
