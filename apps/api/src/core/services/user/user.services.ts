@@ -4,7 +4,7 @@ import { hashPassword, getUserCapabilities } from '@vp/core/services/auth.servic
 import { sql, and, or, like, eq, inArray } from 'drizzle-orm';
 import { createUserMetaDefaults, setUserMeta, setUserRole, batchSetUserMeta } from './userMeta.services';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
-import { GetUsersValidation, UpdateUserValidation } from '../../schemas/users.schema';
+import { GetUsersValidation, UpdateUserValidation, CreateUserSchema } from '../../schemas/users.schema';
 
 // Define a consistent return type for basic user info
 export type UserBasicInfo = {
@@ -33,6 +33,7 @@ export const userServices = {
   deleteUser,
   getUsers
 } as const;
+
 
 /**
  * Creates a new user and inserts their information into the database.
@@ -67,6 +68,19 @@ export async function createUser({
   meta?: Record<string, any>;
   roles?: string[];
 }, dbClient: DbOrTrx = db) {
+
+  const validation = CreateUserSchema.safeParse({
+    user_login,
+    user_email,
+    user_pass,
+    display_name,
+    user_url,
+    user_nicename,
+    meta,
+    roles,
+  });
+
+
   await serverHooks.doAction('svc.user.create:action:before', { user_login, user_email, display_name, meta, roles });
 
   const hashed = await hashPassword(user_pass);

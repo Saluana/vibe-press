@@ -18,6 +18,7 @@ import { Context as RestContext } from "@vp/core/utils/restContext";
      roles: z.array(z.string()).optional(),
      password: z.string(),
      meta: z.record(z.string(), z.any()).optional(),
+     
    })
    .strict();
 

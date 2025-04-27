@@ -11,7 +11,7 @@ import {
   AuthRequest,
 } from "../middleware/verifyRoles.middleware";
 import { sanitiseForContext, Context as RestContext } from "@vp/core/utils/restContext";
-import { CreateUserSchema, UpdateUserValidation, GetUsersValidation } from "@vp/core/schemas/users.schema";
+import { CreateUserSchema } from "@vp/core/schemas/users.schema";
 import { formatZodErrorForWpRest } from "@vp/core/utils/wpError";
 import { ZodError } from "zod";
 
@@ -305,19 +305,10 @@ router.post(
   "/users",
   requireAuth,
   requireCapabilities(['create_users']),
+  // @ts-expect-error
   async (req: AuthRequest, res: Response) => {
-    /** 1. Validate request body */
-    const validation = CreateUserSchema.safeParse(req.body);
-    if (!validation.success) {
-      res.status(400).json(
-        wpError('rest_invalid_param', 'Invalid parameters.', 400, {
-          details: validation.error.flatten(), // Use flatten for better structure
-        })
-      );
-      return;
-    }
 
-    const userData = validation.data;
+    const userData = req.body;
 
     try {
       /** 2. Call service function */
@@ -344,6 +335,11 @@ router.post(
       res.status(201).json(mappedUser);
 
     } catch (e: any) {
+      if (e instanceof ZodError) {
+        const formattedError = formatZodErrorForWpRest(e);
+        return res.status(formattedError.status).json(formattedError.body);
+      }
+
       await serverHooks.doAction('rest.users.create:action:error', { error: e, request: req });
 
       // Handle specific errors, e.g., duplicate username/email
@@ -436,7 +432,7 @@ router.put(
         );
         return;
       }
-      
+
       console.error(`Error updating user ${userId}:`, err);
       await serverHooks.doAction("rest.user.update:action:error", {
         error: err,
