@@ -36,6 +36,13 @@ export const UpdateUserValidation = z
     slug: z.string().optional(),
     roles: z.array(z.string()).optional(),
     meta: z.record(z.string(), z.any()).optional(),
+    user_login: z.string().optional(),
+    user_email: z.string().optional(),
+    display_name: z.string().optional(),
+    user_url: z.string().optional(),
+    user_nicename: z.string().optional(),
+    user_pass: z.string().optional(),
+    user_status: z.number().optional(),
   })
   .strip();
 

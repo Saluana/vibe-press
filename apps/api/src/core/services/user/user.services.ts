@@ -4,6 +4,7 @@ import { hashPassword, getUserCapabilities } from '@vp/core/services/auth.servic
 import { sql, and, or, like, eq, inArray } from 'drizzle-orm';
 import { createUserMetaDefaults, setUserMeta, setUserRole, batchSetUserMeta } from './userMeta.services';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
+import { GetUsersValidation, UpdateUserValidation } from '../../schemas/users.schema';
 
 // Define a consistent return type for basic user info
 export type UserBasicInfo = {
@@ -167,6 +168,9 @@ export async function getUserByLoginOrEmail(identifier: string, dbClient: DbOrTr
  * @returns {Promise<Object|null>} The updated user record.
  */
 export async function updateUser(userId: number, updates: Record<string, any>, dbClient: DbOrTrx = db) {
+  
+  const validation = UpdateUserValidation.parse(updates);
+  
   // Apply filter to allow validation/mutation of updates before processing
   updates = await serverHooks.applyFilters('svc.user.update:filter:input', updates, userId);
   
@@ -176,14 +180,13 @@ export async function updateUser(userId: number, updates: Record<string, any>, d
   const {
     roles,
     meta,
-    // Extract potential meta fields passed directly in updates
     first_name,
     last_name,
     nickname,
     description,
     locale,
     ...standardUpdates // Remaining fields intended for wp_users
-   } = updates;
+   } = validation;
 
   const userTableFields: Partial<typeof schema.wp_users.$inferInsert> = {};
   const metaUpdates: Record<string, any> = meta || {}; // Initialize metaUpdates with passed meta object
@@ -331,7 +334,6 @@ export type GetUsersParams = {
   hasPublishedPosts?: boolean;
 };
 
-import { GetUsersValidation } from '../../schemas/users.schema';
 /**
  * Retrieves users based on various query parameters (pagination, search, sorting, filtering, etc).
  * @param params - The parameters to filter, sort, and paginate users.

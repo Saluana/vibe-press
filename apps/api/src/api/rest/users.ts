@@ -383,17 +383,8 @@ router.put(
       return;
     }
 
-    const validation = UpdateUserValidation.safeParse(req.body);
-    if (!validation.success) {
-      res.status(400).json(
-        wpError("invalid_param", "Invalid parameter(s).", 400, {
-          invalid_params: validation.error.flatten().fieldErrors,
-        })
-      );
-      return;
-    }
-
-    const { password, ...userData } = validation.data;
+    const {password, ...userData } = req.body;
+    
     if (!Object.keys(userData).length) {
       res
         .status(400)
@@ -436,6 +427,16 @@ router.put(
       res.json(mapUserToWP(updatedUser, viewer, RestContext.edit));
       return;
     } catch (err: any) {
+
+      if (err instanceof ZodError) {
+        res.status(400).json(
+          wpError('rest_invalid_param', 'Invalid parameters.', 400, {
+            details: err.flatten(), // Use flatten for better structure
+          })
+        );
+        return;
+      }
+      
       console.error(`Error updating user ${userId}:`, err);
       await serverHooks.doAction("rest.user.update:action:error", {
         error: err,
