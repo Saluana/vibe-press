@@ -258,26 +258,16 @@ router.post(
   requireAuth,
   requireCapabilities({ capabilities: ['edit_posts'] }),
   async (req: AuthRequest, res: Response) => {
-    const parse = postBodySchema.safeParse(req.body);
-    if (!parse.success) {
-      res.status(400).json(
-        // Correct message and use details
-        wpError('rest_invalid_param', 'Invalid parameter(s)', 400, {
-          details: parse.error.flatten(),
-        })
-      );
-      return;
-    }
 
     try {
       const post = await createPost({
         post_author: req.user!.id,
-        post_title: parse.data.title ?? '',
-        post_content: parse.data.content ?? '',
-        post_excerpt: parse.data.excerpt ?? '',
-        post_status: parse.data.status ?? 'draft',
-        post_name: parse.data.slug ?? '',
-        meta: parse.data.meta,
+        post_title: req.body.title ,
+        post_content: req.body.content,
+        post_excerpt: req.body.excerpt,
+        post_status: req.body.status,
+        post_name: req.body.slug,
+        meta: req.body.meta,
       });
       res.status(201).json(mapPostToWP(post, RestContext.edit));
       return;

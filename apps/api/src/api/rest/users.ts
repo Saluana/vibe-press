@@ -1,7 +1,7 @@
 // src/api/rest/users.ts
 import { wpError } from "@vp/core/utils/wpError";
 import { serverHooks } from "@vp/core/hooks/hookEngine.server";
-import { GetUsersParams, getUsers, updateUser, deleteUser, createUser } from "@vp/core/services/user/user.services";
+import {  getUsers, updateUser, deleteUser, createUser } from "@vp/core/services/user/user.services";
 import { Router, Request, Response } from "express";
 import { BASE_URL } from "@vp/core/config";
 import {
@@ -11,7 +11,6 @@ import {
   AuthRequest,
 } from "../middleware/verifyRoles.middleware";
 import { sanitiseForContext, Context as RestContext } from "@vp/core/utils/restContext";
-import { CreateUserSchema } from "@vp/core/schemas/users.schema";
 import { formatZodErrorForWpRest } from "@vp/core/utils/wpError";
 import { ZodError } from "zod";
 

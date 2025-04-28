@@ -3,7 +3,9 @@ import { db, schema } from '@vp/core/db';
 import { sql, and, or, like, eq, inArray, not, count } from 'drizzle-orm';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
 import {  setPostMeta, createPostMetaDefaults } from './postMeta.services';
+import { listQuerySchema, singleQuerySchema, idParamSchema, deleteQuerySchema, postBodySchema } from '../../schemas/posts.schema';  
 
+import {z} from 'zod';
 /*─────────────────────────────────────────────────────────────*
  *  TYPES
  *─────────────────────────────────────────────────────────────*/
@@ -29,6 +31,24 @@ type DbClient = typeof db;
 type TransactionClient = Parameters<DbClient['transaction']>[0] extends (c: infer C) => any ? C : never;
 type DbOrTrx = DbClient | TransactionClient;
 
+import { post_status_enum, comment_status_enum, ping_status_enum, post_type_enum } from '../../db/schema/posts';
+
+const CreatePostValidation = z.object({
+  post_author: z.number(),
+  post_title: z.string(),
+  post_content: z.string(),
+  post_excerpt: z.string().optional(),
+  post_status: z.enum([...post_status_enum] as [string, ...string[]]),
+  post_name: z.string().optional(),
+  post_type: z.enum([...post_type_enum] as [string, ...string[]]).optional(),
+  post_parent: z.number().optional(),
+  guid: z.string().optional(),
+  menu_order: z.number().optional(),
+  comment_status: z.enum([...comment_status_enum] as [string, ...string[]]),
+  ping_status: z.enum([...ping_status_enum] as [string, ...string[]]),
+  meta: z.record(z.any()).optional(),
+});
+
 /*─────────────────────────────────────────────────────────────*
  *  CREATE
  *─────────────────────────────────────────────────────────────*/
@@ -46,7 +66,7 @@ export async function createPost(
       menu_order = 0,
       comment_status = 'open',
       ping_status = 'open',
-      meta = {},               // ⬅️ NEW
+      meta = {},               // 
     }: {
       post_author: number;
       post_title: string;
@@ -60,10 +80,27 @@ export async function createPost(
       menu_order?: number;
       comment_status?: string;
       ping_status?: string;
-      meta?: Record<string, any>; // ⬅️ NEW
+      meta?: Record<string, any>; // 
     },
     dbClient: DbOrTrx = db,
   ) {
+
+    const validatedData = CreatePostValidation.parse({
+      post_author,
+      post_title,
+      post_content,
+      post_excerpt,
+      post_status,
+      post_name,
+      post_type,
+      post_parent,
+      guid,
+      menu_order,
+      comment_status,
+      ping_status,
+      meta,
+    })
+  
     await serverHooks.doAction('svc.post.create:action:before', { post_author, post_title });
   
     let newPost: PostBasicInfo;
@@ -71,18 +108,18 @@ export async function createPost(
       const rows = await trx
         .insert(schema.wp_posts)
         .values({
-          post_author,
-          post_content,
-          post_title,
-          post_excerpt,
-          post_status,
-          post_name,
-          post_type,
-          post_parent,
-          guid,
-          menu_order,
-          comment_status,
-          ping_status,
+          post_author: validatedData.post_author,
+          post_content: validatedData.post_content ?? '',
+          post_title: validatedData.post_title ?? '',
+          post_excerpt: validatedData.post_excerpt ?? '',
+          post_status: validatedData.post_status ?? 'draft',
+          post_name: validatedData.post_name ?? '',
+          post_type: validatedData.post_type ?? 'post',
+          post_parent: validatedData.post_parent,
+          guid: validatedData.guid,
+          menu_order: validatedData.menu_order,
+          comment_status: validatedData.comment_status,
+          ping_status: validatedData.ping_status,
           to_ping: '',
           pinged: '',
           post_content_filtered: '',
@@ -107,7 +144,7 @@ export async function createPost(
   
       newPost = rows[0] as PostBasicInfo;
   
-      // ⬅️ NEW: insert meta within the same transaction
+      // : insert meta within the same transaction
       if (meta && Object.keys(meta).length) {
         await createPostMetaDefaults(newPost.ID, meta, trx);
       }
@@ -117,11 +154,15 @@ export async function createPost(
     return serverHooks.applyFilters('svc.post.create:filter:result', newPost!);
   }
 
+  const PostByIdValidation = z.number();
+
 /*─────────────────────────────────────────────────────────────*
  *  GET SINGLE
  *─────────────────────────────────────────────────────────────*/
 export async function getPostById(id: number, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('svc.post.get:action:before', { id });
+
+  PostByIdValidation.parse(id);
 
   const result = await dbClient
     .select({
@@ -152,6 +193,22 @@ export async function getPostById(id: number, dbClient: DbOrTrx = db) {
   );
 }
 
+const UpdatePostValidation = z.object({
+  post_author: z.number().optional(),
+  post_title: z.string().optional(),
+  post_content: z.string().optional(),
+  post_excerpt: z.string().optional(),
+  post_status: z.enum([...post_status_enum] as [string, ...string[]]).optional(),
+  post_name: z.string().optional(),
+  post_type: z.enum([...post_type_enum] as [string, ...string[]]).optional(),
+  post_parent: z.number().optional(),
+  guid: z.string().optional(),
+  menu_order: z.number().optional(),
+  comment_status: z.enum([...comment_status_enum] as [string, ...string[]]).optional(),
+  ping_status: z.enum([...ping_status_enum] as [string, ...string[]]).optional(),
+  meta: z.record(z.any()).optional(),
+});
+
 /*─────────────────────────────────────────────────────────────*
  *  UPDATE  (meta‑aware)
  *─────────────────────────────────────────────────────────────*/
@@ -160,12 +217,15 @@ export async function updatePost(
     updates: Record<string, any>,
     dbClient: DbOrTrx = db,
   ) {
-    updates = await serverHooks.applyFilters('svc.post.update:filter:input', updates, postId);
+
+    const validatedUpdates = UpdatePostValidation.parse(updates);
+
+    updates = await serverHooks.applyFilters('svc.post.update:filter:input', validatedUpdates, postId);
     await serverHooks.doAction('svc.post.update:action:before', { postId, updates });
   
     /* separate meta from core columns */
-    const { meta, ...coreUpdates } = updates;          // ⬅️ NEW
-  
+    const { meta, ...coreUpdates } = validatedUpdates;          // 
+    
     const wpUpdates: Partial<typeof schema.wp_posts.$inferInsert> = {};
     const allowed: (keyof typeof schema.wp_posts.$inferInsert)[] = [
       'post_author','post_content','post_title','post_excerpt','post_status',
@@ -173,7 +233,24 @@ export async function updatePost(
       'menu_order','post_type','comment_status','ping_status','to_ping',
       'pinged','post_content_filtered',
     ];
-    allowed.forEach(f => { if (coreUpdates[f] !== undefined) wpUpdates[f] = coreUpdates[f]; });
+    const allowedSet = new Set<string>(allowed);
+
+    // Iterate over the actual keys present in coreUpdates
+    for (const key in coreUpdates) {
+        // Ensure the key is a property of coreUpdates itself (not inherited)
+        // and is in the allowed list of database columns
+        if (Object.prototype.hasOwnProperty.call(coreUpdates, key) && allowedSet.has(key)) {
+            // Get the value from the validated updates
+            const value = coreUpdates[key as keyof typeof coreUpdates];
+            
+            // Only assign if the value is explicitly provided (not undefined)
+            if (value !== undefined) {
+                 // Use 'as any' to bypass strict type checking for this assignment,
+                 // as we've already validated the key exists and is allowed.
+                 wpUpdates[key as keyof typeof wpUpdates] = value as any; 
+            }
+        }
+    }
     if (!Object.keys(wpUpdates).length && !meta) throw new Error('No valid fields provided for post update.');
   
     let updated: PostBasicInfo | null = null;
@@ -227,7 +304,7 @@ export async function updatePost(
         updated = rows[0] as PostBasicInfo;
       }
   
-      // ⬅️ NEW: handle meta upserts
+      // : handle meta upserts
       if (meta && Object.keys(meta).length) {
         for (const [k, v] of Object.entries(meta)) {
           await setPostMeta(postId, k, v, trx);
@@ -273,6 +350,21 @@ export async function deletePost(postId: number, dbClient: DbOrTrx = db) {
   );
 }
 
+const GetPostsValidation = z.object({
+  page: z.number().optional(),
+  perPage: z.number().optional(),
+  search: z.string().optional(),
+  exclude: z.array(z.number()).optional(),
+  include: z.array(z.number()).optional(),
+  offset: z.number().optional(),
+  order: z.enum(['asc', 'desc']).optional(),
+  orderBy: z.enum(['id', 'include', 'title', 'date', 'slug', 'author', 'modified']).optional(),
+  slug: z.array(z.string()).optional(),
+  author: z.number().or(z.array(z.number())).optional(),
+  statuses: z.array(z.string()).optional(),
+  types: z.array(z.string()).optional(),
+});
+
 /*─────────────────────────────────────────────────────────────*
  *  GET MULTIPLE
  *─────────────────────────────────────────────────────────────*/
@@ -292,6 +384,8 @@ export type GetPostsParams = {
 };
 
 export async function getPosts(params: GetPostsParams, dbClient: DbOrTrx = db) {
+  const validatedParams = GetPostsValidation.parse(params);
+  
   const {
     page = 1,
     perPage = 10,
@@ -305,7 +399,7 @@ export async function getPosts(params: GetPostsParams, dbClient: DbOrTrx = db) {
     author,
     statuses,
     types,
-  } = params;
+  } = validatedParams;
 
   await serverHooks.doAction('svc.posts.get:action:before', { params });
 
