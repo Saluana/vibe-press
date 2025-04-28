@@ -2,10 +2,11 @@
 import { db, schema } from '@vp/core/db';
 import { sql, and, or, like, eq, inArray, not, count } from 'drizzle-orm';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
-import {  setPostMeta, createPostMetaDefaults } from './postMeta.services';
-import { listQuerySchema, singleQuerySchema, idParamSchema, deleteQuerySchema, postBodySchema } from '../../schemas/posts.schema';  
+import {  setPostMeta, createPostMetaDefaults } from './postMeta.services'; 
+import { CreatePostValidation, idParamSchema, UpdatePostValidation, GetPostsValidation } from '../../schemas/posts.schema';
+import { post_status_enum, comment_status_enum, ping_status_enum, post_type_enum } from '../../db/schema/posts';
+import { basicPostColumns } from './posts.mappers';
 
-import {z} from 'zod';
 /*─────────────────────────────────────────────────────────────*
  *  TYPES
  *─────────────────────────────────────────────────────────────*/
@@ -31,29 +32,16 @@ type DbClient = typeof db;
 type TransactionClient = Parameters<DbClient['transaction']>[0] extends (c: infer C) => any ? C : never;
 type DbOrTrx = DbClient | TransactionClient;
 
-import { post_status_enum, comment_status_enum, ping_status_enum, post_type_enum } from '../../db/schema/posts';
 
-const CreatePostValidation = z.object({
-  post_author: z.number(),
-  post_title: z.string(),
-  post_content: z.string(),
-  post_excerpt: z.string().optional(),
-  post_status: z.enum([...post_status_enum] as [string, ...string[]]),
-  post_name: z.string().optional(),
-  post_type: z.enum([...post_type_enum] as [string, ...string[]]).optional(),
-  post_parent: z.number().optional(),
-  guid: z.string().optional(),
-  menu_order: z.number().optional(),
-  comment_status: z.enum([...comment_status_enum] as [string, ...string[]]),
-  ping_status: z.enum([...ping_status_enum] as [string, ...string[]]),
-  meta: z.record(z.any()).optional(),
-});
 
 /*─────────────────────────────────────────────────────────────*
  *  CREATE
  *─────────────────────────────────────────────────────────────*/
 export async function createPost(
     {
+
+      post_date,
+      post_date_gmt,
       post_author,
       post_title,
       post_content,
@@ -63,11 +51,17 @@ export async function createPost(
       post_type = 'post',
       post_parent = 0,
       guid = '',
+      post_password = '',
       menu_order = 0,
+      featured_media = 0,
       comment_status = 'open',
       ping_status = 'open',
       meta = {},               // 
+      categories = [],
+      tags = [],
     }: {
+      post_date: Date;
+      post_date_gmt: Date;
       post_author: number;
       post_title: string;
       post_content: string;
@@ -77,15 +71,21 @@ export async function createPost(
       post_type?: string;
       post_parent?: number;
       guid?: string;
+      featured_media?: number;
+      post_password?: string;
       menu_order?: number;
       comment_status?: string;
       ping_status?: string;
-      meta?: Record<string, any>; // 
+      meta?: Record<string, any>;
+      categories?: number[];
+      tags?: number[]; // 
     },
     dbClient: DbOrTrx = db,
   ) {
 
     const validatedData = CreatePostValidation.parse({
+      post_date,
+      post_date_gmt,
       post_author,
       post_title,
       post_content,
@@ -95,12 +95,22 @@ export async function createPost(
       post_type,
       post_parent,
       guid,
+      post_password,
       menu_order,
       comment_status,
       ping_status,
       meta,
+      categories,
+      tags,
+      featured_media,
     })
+
+    console.log("[CORE] validatedData:", validatedData);
   
+    const categoryIds = validatedData.categories ?? [];
+    const tagIds = validatedData.tags ?? [];
+    const featuredMediaId = validatedData.featured_media ?? 0; 
+
     await serverHooks.doAction('svc.post.create:action:before', { post_author, post_title });
   
     let newPost: PostBasicInfo;
@@ -117,6 +127,7 @@ export async function createPost(
           post_type: validatedData.post_type ?? 'post',
           post_parent: validatedData.post_parent,
           guid: validatedData.guid,
+          post_password: validatedData.post_password,
           menu_order: validatedData.menu_order,
           comment_status: validatedData.comment_status,
           ping_status: validatedData.ping_status,
@@ -148,13 +159,31 @@ export async function createPost(
       if (meta && Object.keys(meta).length) {
         await createPostMetaDefaults(newPost.ID, meta, trx);
       }
-    });
+
+      // --- Handle featured media, categories, and tags --- 
+
+      // Set Featured Media (using _thumbnail_id meta key)
+      if (featuredMediaId > 0) {
+        await setPostMeta(newPost.ID, '_thumbnail_id', featuredMediaId, trx);
+      }
+
+      // Set Categories (Requires wp_term_relationships logic)
+      if (categoryIds.length > 0) {
+        // TODO: Implement setPostTerms(newPost.ID, categoryIds, 'category', trx);
+      }
+
+      // Set Tags (Requires wp_term_relationships logic)
+      if (tagIds.length > 0) {
+        // TODO: Implement setPostTerms(newPost.ID, tagIds, 'post_tag', trx);
+      }
+      
+    }); // End Transaction
   
     await serverHooks.doAction('svc.post.create:action:after', { post: newPost! });
     return serverHooks.applyFilters('svc.post.create:filter:result', newPost!);
   }
 
-  const PostByIdValidation = z.number();
+
 
 /*─────────────────────────────────────────────────────────────*
  *  GET SINGLE
@@ -162,26 +191,10 @@ export async function createPost(
 export async function getPostById(id: number, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('svc.post.get:action:before', { id });
 
-  PostByIdValidation.parse(id);
+  idParamSchema.parse({ id });
 
   const result = await dbClient
-    .select({
-      ID: schema.wp_posts.ID,
-      post_author: schema.wp_posts.post_author,
-      post_date: schema.wp_posts.post_date,
-      post_date_gmt: schema.wp_posts.post_date_gmt,
-      post_title: schema.wp_posts.post_title,
-      post_excerpt: schema.wp_posts.post_excerpt,
-      post_status: schema.wp_posts.post_status,
-      post_name: schema.wp_posts.post_name,
-      post_modified: schema.wp_posts.post_modified,
-      post_modified_gmt: schema.wp_posts.post_modified_gmt,
-      post_parent: schema.wp_posts.post_parent,
-      guid: schema.wp_posts.guid,
-      menu_order: schema.wp_posts.menu_order,
-      post_type: schema.wp_posts.post_type,
-      comment_count: schema.wp_posts.comment_count,
-    })
+    .select(basicPostColumns)
     .from(schema.wp_posts)
     .where(eq(schema.wp_posts.ID, id));
 
@@ -193,21 +206,6 @@ export async function getPostById(id: number, dbClient: DbOrTrx = db) {
   );
 }
 
-const UpdatePostValidation = z.object({
-  post_author: z.number().optional(),
-  post_title: z.string().optional(),
-  post_content: z.string().optional(),
-  post_excerpt: z.string().optional(),
-  post_status: z.enum([...post_status_enum] as [string, ...string[]]).optional(),
-  post_name: z.string().optional(),
-  post_type: z.enum([...post_type_enum] as [string, ...string[]]).optional(),
-  post_parent: z.number().optional(),
-  guid: z.string().optional(),
-  menu_order: z.number().optional(),
-  comment_status: z.enum([...comment_status_enum] as [string, ...string[]]).optional(),
-  ping_status: z.enum([...ping_status_enum] as [string, ...string[]]).optional(),
-  meta: z.record(z.any()).optional(),
-});
 
 /*─────────────────────────────────────────────────────────────*
  *  UPDATE  (meta‑aware)
@@ -282,23 +280,7 @@ export async function updatePost(
       } else {
         /* if only meta updates, we still need the post row for return */
         const rows = await trx
-          .select({
-            ID: schema.wp_posts.ID,
-            post_author: schema.wp_posts.post_author,
-            post_date: schema.wp_posts.post_date,
-            post_date_gmt: schema.wp_posts.post_date_gmt,
-            post_title: schema.wp_posts.post_title,
-            post_excerpt: schema.wp_posts.post_excerpt,
-            post_status: schema.wp_posts.post_status,
-            post_name: schema.wp_posts.post_name,
-            post_modified: schema.wp_posts.post_modified,
-            post_modified_gmt: schema.wp_posts.post_modified_gmt,
-            post_parent: schema.wp_posts.post_parent,
-            guid: schema.wp_posts.guid,
-            menu_order: schema.wp_posts.menu_order,
-            post_type: schema.wp_posts.post_type,
-            comment_count: schema.wp_posts.comment_count,
-          })
+          .select(basicPostColumns)
           .from(schema.wp_posts)
           .where(eq(schema.wp_posts.ID, postId));
         updated = rows[0] as PostBasicInfo;
@@ -350,20 +332,7 @@ export async function deletePost(postId: number, dbClient: DbOrTrx = db) {
   );
 }
 
-const GetPostsValidation = z.object({
-  page: z.number().optional(),
-  perPage: z.number().optional(),
-  search: z.string().optional(),
-  exclude: z.array(z.number()).optional(),
-  include: z.array(z.number()).optional(),
-  offset: z.number().optional(),
-  order: z.enum(['asc', 'desc']).optional(),
-  orderBy: z.enum(['id', 'include', 'title', 'date', 'slug', 'author', 'modified']).optional(),
-  slug: z.array(z.string()).optional(),
-  author: z.number().or(z.array(z.number())).optional(),
-  statuses: z.array(z.string()).optional(),
-  types: z.array(z.string()).optional(),
-});
+
 
 /*─────────────────────────────────────────────────────────────*
  *  GET MULTIPLE
@@ -439,23 +408,7 @@ export async function getPosts(params: GetPostsParams, dbClient: DbOrTrx = db) {
 
   // Get paginated posts
   const posts = (await dbClient
-    .select({
-      ID: schema.wp_posts.ID,
-      post_author: schema.wp_posts.post_author,
-      post_date: schema.wp_posts.post_date,
-      post_date_gmt: schema.wp_posts.post_date_gmt,
-      post_title: schema.wp_posts.post_title,
-      post_excerpt: schema.wp_posts.post_excerpt,
-      post_status: schema.wp_posts.post_status,
-      post_name: schema.wp_posts.post_name,
-      post_modified: schema.wp_posts.post_modified,
-      post_modified_gmt: schema.wp_posts.post_modified_gmt,
-      post_parent: schema.wp_posts.post_parent,
-      guid: schema.wp_posts.guid,
-      menu_order: schema.wp_posts.menu_order,
-      post_type: schema.wp_posts.post_type,
-      comment_count: schema.wp_posts.comment_count,
-    })
+    .select(basicPostColumns)
     .from(schema.wp_posts)
     .where(whereClause) // Apply the same conditions here
     .orderBy(orderByClause)

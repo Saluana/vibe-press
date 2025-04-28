@@ -45,7 +45,7 @@ export const wp_posts = pgTable(
       .notNull(),
     ping_status: varchar('ping_status', { length: 20 }).default('open').notNull(),
     post_password: varchar('post_password', { length: 255 }).default('').notNull(),
-    post_name: varchar('post_name', { length: 200 }).default('').notNull(),
+    post_name: varchar('post_name', { length: 200 }).default('').notNull().unique(),
     to_ping: text('to_ping').notNull(),
     pinged: text('pinged').notNull(),
     post_modified: timestamp('post_modified', { withTimezone: true })
@@ -74,6 +74,7 @@ export const wp_posts = pgTable(
     ),
     index('post_parent_idx').on(table.post_parent),
     index('post_author_idx').on(table.post_author),
+    
   ],
 );
 

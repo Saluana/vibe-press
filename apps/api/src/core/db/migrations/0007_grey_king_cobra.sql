@@ -1,0 +1,1 @@
+ALTER TABLE "wp_posts" ADD CONSTRAINT "wp_posts_post_name_unique" UNIQUE("post_name");

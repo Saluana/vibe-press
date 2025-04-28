@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { z } from 'zod';
+import { formatZodErrorForWpRest } from "@vp/core/utils/wpError";
+import { ZodError } from "zod";
 import { wpError } from '@vp/core/utils/wpError';
 import { BASE_URL } from '@vp/core/config';
 import {
@@ -232,6 +233,7 @@ router.get('/posts/:id', optionalAuth, async (req: AuthRequest, res: Response) =
 
   try {
     const post = await getPostById(postId);
+
     if (!post) {
       res
         .status(404)
@@ -257,21 +259,25 @@ router.post(
   '/posts',
   requireAuth,
   requireCapabilities({ capabilities: ['edit_posts'] }),
+  // @ts-expect-error
   async (req: AuthRequest, res: Response) => {
 
+    const postInput = {
+      ...req.body, // Spread all body properties
+      post_author: req.user!.id, // Ensure author is set
+    };
+
+    console.log("[REST] postInput:", postInput);
+
     try {
-      const post = await createPost({
-        post_author: req.user!.id,
-        post_title: req.body.title ,
-        post_content: req.body.content,
-        post_excerpt: req.body.excerpt,
-        post_status: req.body.status,
-        post_name: req.body.slug,
-        meta: req.body.meta,
-      });
+      const post = await createPost(postInput);
       res.status(201).json(mapPostToWP(post, RestContext.edit));
       return;
     } catch (e: any) {
+      if (e instanceof ZodError) {
+        const formattedError = formatZodErrorForWpRest(e);
+        return res.status(formattedError.status).json(formattedError.body);
+      }
       await serverHooks.doAction('rest.posts.create:action:error', { error: e });
       res
         .status(500)
@@ -296,25 +302,16 @@ router.put(
         .json(wpError('rest_invalid_param', 'Invalid parameter(s): id', 400));
       return;
     }
-    const parse = postBodySchema.safeParse(req.body);
-    if (!parse.success) {
-      res.status(400).json(
-         // Correct message and use details
-        wpError('rest_invalid_param', 'Invalid parameter(s)', 400, {
-          details: parse.error.flatten(),
-        })
-      );
-      return;
-    }
-
+    const data = req.body;
     try {
       const updated = await updatePost(idParams.data.id, {
-        post_title: parse.data.title,
-        post_content: parse.data.content,
-        post_excerpt: parse.data.excerpt,
-        post_status: parse.data.status,
-        post_name: parse.data.slug,
-        meta: parse.data.meta,
+        post_title: data.title,
+        post_content: data.content,
+        post_excerpt: data.excerpt,
+        post_status: data.status,
+        post_name: data.slug,
+
+        meta: data.meta,
       });
       res.json(mapPostToWP(updated!, RestContext.edit));
       return;

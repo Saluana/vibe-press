@@ -5,6 +5,7 @@ import { sql, and, or, like, eq, inArray } from 'drizzle-orm';
 import { createUserMetaDefaults, setUserMeta, setUserRole, batchSetUserMeta } from './userMeta.services';
 import { serverHooks } from '@vp/core/hooks/hookEngine.server';
 import { GetUsersValidation, UpdateUserValidation, CreateUserSchema } from '../../schemas/users.schema';
+import { basicUserColumns } from './user.mappers';
 
 // Define a consistent return type for basic user info
 export type UserBasicInfo = {
@@ -96,16 +97,7 @@ export async function createUser({
       user_url: user_url,
       user_activation_key: '',
       user_status: 0,
-    }).returning({
-      id: schema.wp_users.ID,
-      user_login: schema.wp_users.user_login,
-      user_nicename: schema.wp_users.user_nicename,
-      user_email: schema.wp_users.user_email,
-      user_url: schema.wp_users.user_url,
-      user_registered: schema.wp_users.user_registered,
-      user_status: schema.wp_users.user_status,
-      display_name: schema.wp_users.display_name,
-    });
+    }).returning(basicUserColumns);
 
     const newUser = userResult[0];
 
@@ -237,16 +229,7 @@ export async function updateUser(userId: number, updates: Record<string, any>, d
            const result = await trx.update(schema.wp_users)
               .set(userTableFields)
               .where(eq(schema.wp_users.ID, userId))
-              .returning({
-                id: schema.wp_users.ID,
-                user_login: schema.wp_users.user_login,
-                user_nicename: schema.wp_users.user_nicename,
-                user_email: schema.wp_users.user_email,
-                user_url: schema.wp_users.user_url,
-                user_registered: schema.wp_users.user_registered,
-                user_status: schema.wp_users.user_status,
-                display_name: schema.wp_users.display_name,
-              });
+              .returning(basicUserColumns);
            if (result.length > 0) {
              updatedUserResult = result;
            } else if (Object.keys(metaUpdates).length === 0 && !roles) {
@@ -308,16 +291,7 @@ export async function deleteUser(userId: number, dbClient: DbOrTrx = db) {
   await serverHooks.doAction('svc.user.delete:action:before', { userId });
   const result = await dbClient.delete(schema.wp_users)
     .where(eq(schema.wp_users.ID, userId))
-    .returning({
-        id: schema.wp_users.ID,
-        user_login: schema.wp_users.user_login,
-        user_nicename: schema.wp_users.user_nicename,
-        user_email: schema.wp_users.user_email,
-        user_url: schema.wp_users.user_url,
-        user_registered: schema.wp_users.user_registered,
-        user_status: schema.wp_users.user_status,
-        display_name: schema.wp_users.display_name,
-    });
+    .returning(basicUserColumns);
   await serverHooks.doAction('svc.user.delete:action:after', { user: result[0] });
   // Ensure the filtered result matches the expected structure
   return await serverHooks.applyFilters('svc.user.delete:filter:result', result[0] as UserBasicInfo || null);
